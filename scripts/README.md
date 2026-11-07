@@ -8,6 +8,7 @@
 | `cluster-up.ps1` / `cluster-down.ps1` ✅ | Создать / удалить kind-кластер `sre-ai` | 0 |
 | `build-images.ps1` ✅ | Собрать Docker-образы сервисов и загрузить в kind (`-Services`, `-Tag`) | 1 |
 | `deploy-phase1.ps1` ✅ | Namespace → сгенерированный Secret → сырые манифесты Фазы 1 | 1 |
+| `deploy-phase2.ps1` ✅ | Traefik + cert-manager (Helm) → CA → Ingress; экспорт корневого CA в `.local/` | 2 |
 | `deploy-infra.ps1` | Установить инфраструктурные Helm-чарты в правильном порядке | 3+ |
 | `deploy-apps.ps1` | Развернуть sandbox-сервисы и агента | 3+ |
 | `port-forward.ps1` | Пробросить Grafana/Prometheus/Loki/Alertmanager на localhost для агента при локальном запуске | 5, 7 |

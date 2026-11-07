@@ -41,7 +41,7 @@
 |---|---|---|
 | Кластер | kind (Kubernetes in Docker) | Мультинодовый кластер локально, быстро пересоздаётся |
 | Пакетирование | Helm | Стандарт де-факто для деплоя в k8s |
-| Ingress | ingress-nginx | Самый распространённый, хорошо документирован |
+| Ingress | Traefik | Поддерживает и Ingress, и Gateway API; ingress-nginx закрыт в марте 2026 |
 | Сертификаты | cert-manager | Автоматический выпуск TLS-сертификатов, как в проде |
 | Service mesh | Linkerd (основной вариант) | Проще Istio, mTLS «из коробки» — идеален для обучения |
 | Метрики | Prometheus + kube-prometheus-stack | Стандарт мониторинга в k8s |

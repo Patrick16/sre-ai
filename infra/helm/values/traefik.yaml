@@ -1,0 +1,54 @@
+# Traefik as the Ingress Controller (ingress-nginx was retired in March 2026).
+# Chart: traefik/traefik 42.3.1 (Traefik v3.7). Installed by scripts/deploy-phase2.ps1.
+
+# kind has no cloud load balancer. Instead the control-plane node's ports 80/443 are mapped to the
+# host (infra/cluster/kind-config.yaml), and Traefik binds them as hostPorts on that node.
+nodeSelector:
+  ingress-ready: "true"
+tolerations:
+  - key: node-role.kubernetes.io/control-plane
+    operator: Exists
+    effect: NoSchedule
+
+# A hostPort can be held by only one pod per node: the old pod must stop before the new one starts.
+updateStrategy:
+  type: RollingUpdate
+  rollingUpdate:
+    maxUnavailable: 1
+    maxSurge: 0
+
+service:
+  spec:
+    type: ClusterIP
+
+ports:
+  web:
+    hostPort: 80
+    http:
+      redirections:
+        entryPoint:
+          to: websecure
+          scheme: https
+          permanent: true
+  websecure:
+    hostPort: 443
+
+ingressClass:
+  enabled: true
+  isDefaultClass: true
+
+providers:
+  kubernetesIngress:
+    enabled: true
+  kubernetesCRD:
+    enabled: true   # Traefik's own CRDs, e.g. Middleware (used for /api prefix stripping)
+
+accessLog:
+  enabled: true
+
+# Dashboard only on the internal "traefik" entrypoint (port 8080, not exposed): reach it with
+#   kubectl port-forward -n traefik deploy/traefik 9000:8080  ->  http://localhost:9000/dashboard/
+ingressRoute:
+  dashboard:
+    enabled: true
+    entryPoints: [traefik]

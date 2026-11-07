@@ -5,7 +5,7 @@
 ```
                          ┌──────────────────────────── kind cluster ─────────────────────────────┐
   Браузер / curl         │                                                                       │
-  https://sandbox.local ─┼─► ingress-nginx ──► frontend ──► orders-api ──► worker                │
+  https://sandbox.localhost ► traefik ──► frontend ──► orders-api ◄── worker                     │
                          │      (TLS от          │  mTLS       │   mTLS       │                   │
                          │    cert-manager)      └─────── Linkerd sidecars ───┘                   │
                          │                                     │                                 │
@@ -36,7 +36,7 @@
 | Namespace | Что там | Зачем отдельно |
 |---|---|---|
 | `sandbox` | frontend, orders-api, worker, postgres | Подопытная система; цель для хаоса и агента |
-| `ingress-nginx` | Ingress Controller | Инфраструктура входящего трафика |
+| `traefik` | Ingress Controller | Инфраструктура входящего трафика |
 | `cert-manager` | Выпуск сертификатов | Инфраструктура |
 | `linkerd`, `linkerd-viz` | Control plane mesh | Инфраструктура |
 | `monitoring` | Prometheus, Grafana, Alertmanager, Loki | Наблюдаемость не должна падать вместе с приложением |

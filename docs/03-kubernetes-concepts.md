@@ -48,9 +48,10 @@ Kubernetes — это система, которой вы описываете *
 
 ## Ingress и Ingress Controller
 - **Что**: Ingress — правила HTTP-маршрутизации (хост/путь → Service). Ingress Controller
-  (ingress-nginx) — реальный прокси, который эти правила исполняет.
+  (у нас Traefik) — реальный прокси, который эти правила исполняет.
 - **Проблема**: не заводить по LoadBalancer на каждый сервис; единая точка входа с TLS, маршрутизацией по хостам/путям.
-- **В проекте**: `https://sandbox.local` → frontend. В kind пробрасываем порты 80/443 с хоста.
+- **В проекте**: `https://sandbox.localhost` → frontend, `/api` → orders-api. В kind пробрасываем порты 80/443 с хоста.
+  Практика — [11-phase-2-ingress-tls.md](11-phase-2-ingress-tls.md).
 - **Важно**: объект Ingress без установленного контроллера ничего не делает. Это частая ловушка.
 - **Дальше**: Gateway API — более новая замена Ingress; можно попробовать в фазе 10.
 
@@ -108,7 +109,7 @@ Kubernetes — это система, которой вы описываете *
 - **Chart** — пакет шаблонов манифестов. **Values** — параметры. **Release** — установленный экземпляр чарта.
 - **Проблема**: десятки почти одинаковых YAML на каждый сервис и окружение; версионирование и откаты.
 - **В проекте**: свой общий чарт `sandbox-service` для всех наших сервисов + готовые чарты
-  сообщества для инфраструктуры (ingress-nginx, kube-prometheus-stack, loki, linkerd, chaos-mesh, postgresql).
+  сообщества для инфраструктуры (traefik, cert-manager, kube-prometheus-stack, loki, linkerd, chaos-mesh, postgresql).
 - **Руками**: `helm template` (посмотреть, что получится), `helm diff` (плагин), `helm rollback`.
 
 ## TLS и mTLS

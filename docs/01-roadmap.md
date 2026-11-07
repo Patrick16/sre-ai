@@ -36,10 +36,11 @@
 
 **Понять:** почему Service недостаточно, что делает Ingress Controller, как работает TLS.
 
-- [ ] Установить ingress-nginx
-- [ ] Ingress для `frontend` по хосту `sandbox.local`
-- [ ] cert-manager + self-signed ClusterIssuer, HTTPS на Ingress
-- [ ] Эксперимент: path-based и host-based маршрутизация
+- [x] Установить Ingress Controller — Traefik (ingress-nginx закрыт в марте 2026), см. [11](11-phase-2-ingress-tls.md)
+- [x] Ingress для `frontend` по хосту `sandbox.localhost`, `/api` → orders-api (path-based)
+- [x] cert-manager + собственный CA (self-signed root → ClusterIssuer `sandbox-ca`), HTTPS и редирект с HTTP
+- [ ] Упражнения из [11-phase-2-ingress-tls.md](11-phase-2-ingress-tls.md): host-based маршрут, ротация сертификата
+- [ ] (Опционально) тот же маршрут через Gateway API (`Gateway` + `HTTPRoute`) на Traefik
 
 ## Фаза 3. Helm
 

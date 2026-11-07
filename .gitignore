@@ -16,6 +16,9 @@ kubeconfig*
 *.pem
 *.key
 
+# Exported cluster artifacts (root CA cert, etc.)
+.local/
+
 # Helm
 infra/helm/**/charts/*.tgz
 
