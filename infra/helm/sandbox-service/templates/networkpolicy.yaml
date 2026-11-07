@@ -70,6 +70,22 @@ spec:
         - port: {{ .port | default "http" }}
         - port: 4143   # the destination's Linkerd inbound proxy (meshed traffic)
     {{- end }}
+    {{- range $np.allowToNamespaces }}
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .namespace }}
+      ports:
+        - port: {{ .port }}
+        - port: 4143
+    {{- end }}
+    {{- range $np.allowToCidrs }}
+    - to:
+        - ipBlock:
+            cidr: {{ .cidr }}
+      ports:
+        - port: {{ .port }}
+    {{- end }}
 {{- if .Values.service.enabled }}
 ---
 # The `helm test` pod may only reach this release's pods.

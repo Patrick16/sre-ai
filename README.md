@@ -46,7 +46,8 @@ Traefik + cert-manager и HTTPS на `https://sandbox.localhost` ([docs/11](docs
 свой Helm-чарт и релиз на каждый сервис ([docs/12](docs/12-phase-3-helm.md)), PostgreSQL на StatefulSet
 с постоянным томом ([docs/13](docs/13-phase-4-storage.md)), мониторинг, логи, SLO и алерты с доставкой
 в заглушку агента ([docs/14](docs/14-phase-5-observability.md)), default-deny NetworkPolicy и service mesh
-Linkerd с mTLS ([docs/15](docs/15-phase-6-network-security.md)). Дальше — Фаза 7 (агент MVP).
+Linkerd с mTLS ([docs/15](docs/15-phase-6-network-security.md)), SRE-агент в режиме наблюдения на Microsoft Agent
+Framework с локальной моделью в LM Studio ([docs/16](docs/16-phase-7-agent-mvp.md)). Дальше — Фаза 8 (безопасные действия и guardrails).
 
 | UI | Адрес |
 |---|---|
@@ -55,6 +56,7 @@ Linkerd с mTLS ([docs/15](docs/15-phase-6-network-security.md)). Дальше �
 | Prometheus | https://prometheus.localhost |
 | Alertmanager | https://alertmanager.localhost |
 | Linkerd Viz | `kubectl port-forward -n linkerd-viz svc/web 8084:8084` → http://localhost:8084 |
+| SRE-агент | `kubectl port-forward -n sre-agent svc/sre-agent 8099:80` → `POST /runs`, `GET /runs`, `GET /runs/{id}/report` |
 Код, манифесты и чарты появляются по мере прохождения фаз из [роадмапа](docs/01-roadmap.md).
 
 ```powershell

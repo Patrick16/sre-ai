@@ -3,6 +3,9 @@
 Самая интересная часть проекта. Документ описывает, **как думать** о дизайне агента,
 а не только что написать.
 
+> Реализация (Фаза 7) — [16-phase-7-agent-mvp.md](16-phase-7-agent-mvp.md): Microsoft Agent Framework вместо «голого»
+> HttpClient (раздел «LLM-клиент» ниже), completion check — «steady state namespace», один прогон на namespace.
+
 ## Что такое agent harness
 
 LLM сама по себе умеет только одно: получить текст и вернуть текст. Всё остальное —

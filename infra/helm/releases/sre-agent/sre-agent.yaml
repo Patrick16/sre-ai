@@ -1,12 +1,61 @@
 # helm upgrade --install sre-agent infra/helm/sandbox-service -n sre-agent -f infra/helm/releases/sre-agent/sre-agent.yaml
-# Phase 5: only the Alertmanager webhook stub (logs alerts, GET /alerts). The real agent arrives in Phase 7.
+# Phase 7: the observe-only agent (Ralph loop + RALF iterations, Microsoft Agent Framework, local LLM in LM Studio).
 replicas: 1
 
 image:
   repository: sre-agent/host
-  tag: "0.1.0"
+  tag: "0.2.3"   # 0.2.0: observe-only; 0.2.1: survives model failures; 0.2.2/0.2.3: steady state = symptom alerts gone + SLIs OK now
+
+# The agent reads the Kubernetes API, so it needs a token - with read-only rights in sandbox and nothing else.
+serviceAccount:
+  automountToken: true
+rbac:
+  namespaceRules:
+    sandbox:
+      - apiGroups: [""]
+        resources: [pods, events, services, endpoints, persistentvolumeclaims]
+        verbs: [get, list, watch]
+      - apiGroups: [apps]
+        resources: [deployments, statefulsets, replicasets]
+        verbs: [get, list, watch]
+      - apiGroups: [events.k8s.io]
+        resources: [events]
+        verbs: [get, list, watch]
+
+# Reports, audit log and RunState survive restarts.
+persistence:
+  enabled: true
+  size: 1Gi
+  mountPath: /data
+
+# Agent__* / Llm__* / Tools__* override appsettings.json ("__" = nesting).
+configEnv:
+  Agent__Namespace: "sandbox"
+  Agent__ScheduleMinutes: "0"         # e.g. "60" for an hourly health check (each run costs minutes of GPU)
+  Agent__Language: "Russian"
+  # An 8-minute outage + ~5 minutes for the 5m SLI window to cool down doesn't fit into 6 iterations of
+  # ~1.5 min + 60 s backoff: the first end-to-end test ended LimitsExhausted one iteration short.
+  Agent__Limits__MaxIterations: "10"
+  Llm__BaseUrl: "http://host.docker.internal:1234/v1"   # LM Studio on the Windows host
+  Llm__Model: "qwen/qwen3.5-9b"
+  Llm__AllowedModels__0: "qwen/qwen3.5-9b"
+  Llm__AllowedModels__1: "qwythos-9b-claude-mythos-5-1m"
+  Llm__AllowedModels__2: "gemma4-26b-a4b-uncensored-hauhaucs-balanced"
+  Tools__Namespaces__0: "sandbox"
 
 networkPolicy:
-  allowFromNamespaces: [monitoring]     # Alertmanager's webhook
-  # Phase 7 adds egress: Kubernetes API, Prometheus, Loki, the LLM endpoint.
-  allowToApps: []
+  allowFromNamespaces: [monitoring]                 # Alertmanager's webhook
+  allowToNamespaces:
+    - { namespace: monitoring, port: 9090 }         # Prometheus
+    - { namespace: monitoring, port: 3100 }         # Loki
+    - { namespace: monitoring, port: 9093 }         # Alertmanager API
+  allowToCidrs:
+    - { cidr: 172.18.0.0/16, port: 6443 }           # kube-apiserver (kind's node network; Service 10.96.0.1:443 after DNAT)
+    - { cidr: 192.168.65.254/32, port: 1234 }       # LM Studio via host.docker.internal (Docker Desktop's host gateway)
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 128Mi
+  limits:
+    memory: 512Mi

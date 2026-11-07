@@ -12,9 +12,13 @@ spec:
     matchLabels:
       {{- include "sandbox-service.selectorLabels" . | nindent 6 }}
   strategy:
+    {{- if .Values.persistence.enabled }}
+    type: Recreate   # singleton: the old pod is gone before the new one mounts the volume
+    {{- else }}
     type: RollingUpdate
     rollingUpdate:
       {{- toYaml .Values.rollingUpdate | nindent 6 }}
+    {{- end }}
   template:
     metadata:
       labels:
@@ -27,7 +31,7 @@ spec:
       {{- if .Values.serviceAccount.create }}
       serviceAccountName: {{ $name }}
       {{- end }}
-      automountServiceAccountToken: false
+      automountServiceAccountToken: {{ and .Values.serviceAccount.create .Values.serviceAccount.automountToken }}
       {{- if .Values.spreadAcrossNodes }}
       topologySpreadConstraints:
         - maxSkew: 1
@@ -83,6 +87,10 @@ spec:
           volumeMounts:
             - name: tmp
               mountPath: /tmp
+            {{- if .Values.persistence.enabled }}
+            - name: data
+              mountPath: {{ .Values.persistence.mountPath }}
+            {{- end }}
             {{- if .Values.configFiles.files }}
             - name: config-files
               mountPath: {{ .Values.configFiles.mountPath }}
@@ -127,6 +135,11 @@ spec:
       volumes:
         - name: tmp
           emptyDir: {}
+        {{- if .Values.persistence.enabled }}
+        - name: data
+          persistentVolumeClaim:
+            claimName: {{ $name }}-data
+        {{- end }}
         {{- if .Values.configFiles.files }}
         - name: config-files
           configMap:

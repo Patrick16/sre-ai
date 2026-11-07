@@ -94,13 +94,18 @@
 
 **Понять:** как устроен agent harness, tool calling, контекст LLM, Ralph loop и RALF-итерация.
 
-- [ ] Абстракция LLM-клиента: OpenAI-совместимый API и LM Studio через один интерфейс
-- [ ] Read-only tools: состояние подов/деплойментов, события k8s, PromQL-запрос, запрос логов из Loki, активные алерты
-- [ ] RALF-итерация v1: Retrieve → Analyze → (действий нет) → Feedback (отчёт)
-- [ ] Ralph loop v1: TaskSpec, RunState на диске, completion check, лимиты, backoff — в режиме наблюдения
-- [ ] Запуск по расписанию и по вебхуку Alertmanager
-- [ ] Отчёт в `reports/` в Markdown
-- [ ] Метрики и логи самого агента
+- [x] Microsoft Agent Framework (преемник Semantic Kernel) поверх Microsoft.Extensions.AI — см. [16](16-phase-7-agent-mvp.md)
+- [x] Абстракция LLM-клиента: OpenAI-совместимый API и LM Studio через один интерфейс; модель по умолчанию `qwen/qwen3.5-9b`, выбор из `AllowedModels`
+- [x] Read-only tools: поды, workload'ы, события k8s, PromQL, логи из Loki, активные алерты
+- [x] RALF-итерация v1: Retrieve (код) → Analyze (агент, свежая сессия, бюджет шагов) → Lead (observe-only) → Feedback (completion check)
+- [x] Ralph loop v1: TaskSpec, RunState на диске, completion check «steady state namespace», лимиты, backoff
+- [x] Запуск по вебхуку Alertmanager, по расписанию и вручную (`POST /runs`); один прогон на namespace
+- [x] Отчёт в Markdown и audit log (JSONL) на PVC
+- [x] Метрики и логи самого агента (+ `gen_ai.*` от Microsoft.Extensions.AI)
+- [x] 17 тестов harness на «скриптованной» модели; RBAC только на чтение в `sandbox`; default-deny egress
+- [x] Сквозной сценарий «база упала → агент → steady state» — `Resolved`; найдены и исправлены критерий steady state и устойчивость к сбоям модели
+- [ ] Финальный синтез отчёта по всем итерациям + «установленные факты» в RunState (итоговая причина бывает хуже промежуточной)
+- [ ] Упражнения из [16-phase-7-agent-mvp.md](16-phase-7-agent-mvp.md): сравнение моделей, prompt injection
 
 ## Фаза 8. Безопасные действия и guardrails
 

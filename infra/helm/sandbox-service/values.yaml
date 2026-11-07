@@ -73,6 +73,24 @@ spreadAcrossNodes: false
 # mTLS identity. The pod gets no Kubernetes API token - none of these services talks to the API.
 serviceAccount:
   create: true
+  automountToken: false   # true only for a workload that really talks to the Kubernetes API (the agent)
+
+# Kubernetes API permissions of the ServiceAccount: a Role + RoleBinding in each listed namespace.
+# Namespaced on purpose (least privilege): no ClusterRole, no access outside the listed namespaces.
+#   rbac:
+#     namespaceRules:
+#       sandbox:
+#         - { apiGroups: [""], resources: [pods], verbs: [get, list, watch] }
+rbac:
+  namespaceRules: {}
+
+# A PVC mounted into the pod. With it the Deployment switches to strategy Recreate: one instance at a time
+# (an RWO volume, and for the agent - two copies would investigate and later act twice).
+persistence:
+  enabled: false
+  size: 1Gi
+  mountPath: /data
+  storageClassName: standard
 
 # The namespace denies all traffic by default (infra/manifests/platform/networkpolicy-baseline.yaml);
 # this declares what this service needs. Ports are container port NAMES of the destination pod ("http",
@@ -82,6 +100,8 @@ networkPolicy:
   allowFromApps: []        # apps in the same namespace that may call our "http" port, e.g. [frontend, worker]
   allowFromNamespaces: []  # whole namespaces that may call it, e.g. [traefik]
   allowToApps: []          # whom we call: [{ app: orders-api, port: http }]
+  allowToNamespaces: []    # any pod of another namespace on a port: [{ namespace: monitoring, port: 9090 }]
+  allowToCidrs: []         # outside the pod network: [{ cidr: 172.18.0.0/16, port: 6443 }]
 
 # Service-mesh traffic policy (Gateway API HTTPRoutes attached to this Service; Linkerd applies them in the
 # CALLER's proxy). Once a Service has any HTTPRoute, only routed requests are accepted, so a catch-all route

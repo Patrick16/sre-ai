@@ -68,7 +68,39 @@
     "serviceAccount": {
       "type": "object",
       "additionalProperties": false,
-      "properties": { "create": { "type": "boolean" } }
+      "properties": { "create": { "type": "boolean" }, "automountToken": { "type": "boolean" } }
+    },
+    "rbac": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "namespaceRules": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["apiGroups", "resources", "verbs"],
+              "properties": {
+                "apiGroups": { "type": "array", "items": { "type": "string" } },
+                "resources": { "type": "array", "items": { "type": "string", "not": { "enum": ["secrets", "*"] } } },
+                "verbs": { "type": "array", "items": { "type": "string", "not": { "const": "*" } } }
+              }
+            }
+          }
+        }
+      }
+    },
+    "persistence": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "size": { "type": "string" },
+        "mountPath": { "type": "string" },
+        "storageClassName": { "type": "string" }
+      }
     },
     "networkPolicy": {
       "type": "object",
@@ -88,6 +120,24 @@
               "port": { "type": ["string", "integer"] },
               "namespace": { "type": "string" }
             }
+          }
+        },
+        "allowToNamespaces": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["namespace", "port"],
+            "properties": { "namespace": { "type": "string" }, "port": { "type": ["string", "integer"] } }
+          }
+        },
+        "allowToCidrs": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["cidr", "port"],
+            "properties": { "cidr": { "type": "string" }, "port": { "type": "integer" } }
           }
         }
       }

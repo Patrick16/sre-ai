@@ -11,7 +11,7 @@
 | `deploy-infra.ps1` ✅ | Платформа: namespaces, kube-prometheus-stack, Traefik, cert-manager, CA-issuers, Loki, Alloy, дашборды; экспорт корневого CA в `.local/` | 2–5 |
 | `deploy-apps.ps1` ✅ | Secrets (один раз) + Helm-релизы: postgres → orders-api → worker → frontend → loadgen → sre-agent (`-Services`), `--rollback-on-failure` | 3–5 |
 | `grafana-password.ps1` ✅ | Показать сгенерированный пароль `admin` для Grafana | 5 |
-| `port-forward.ps1` | Пробросить Prometheus/Loki/Alertmanager на localhost для агента при локальном запуске | 7 |
+| `port-forward.ps1` ✅ | Пробросить Prometheus/Loki/Alertmanager на localhost для локального запуска агента (`dotnet run`, окружение Development) | 7 |
 | `up-all.ps1` | Всё с нуля одной командой | 10 |
 
 Каждый скрипт должен быть идемпотентным: повторный запуск не ломает окружение.
