@@ -1,0 +1,28 @@
+# .NET
+bin/
+obj/
+*.user
+*.suo
+.vs/
+.idea/
+TestResults/
+*.trx
+
+# Local config / secrets
+appsettings.*.local.json
+*.env
+.env*
+kubeconfig*
+*.pem
+*.key
+
+# Helm
+infra/helm/**/charts/*.tgz
+
+# Agent output (keep README)
+reports/*
+!reports/README.md
+
+# OS
+Thumbs.db
+.DS_Store
