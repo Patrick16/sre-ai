@@ -40,6 +40,12 @@ Retrieve → Analyze → Lead → Feedback, см. [docs/05-agent-architecture.md
 
 ## Статус
 
-Проект в **Фазе 0** (документация и структура). Код, манифесты и чарты появляются
-по мере прохождения фаз из [роадмапа](docs/01-roadmap.md). Актуальный статус по
+**Фаза 0 пройдена**: инструменты, .NET solution, локальный kind-кластер
+([docs/09-dev-environment.md](docs/09-dev-environment.md)). Дальше — Фаза 1 (базовый Kubernetes).
+Код, манифесты и чарты появляются по мере прохождения фаз из [роадмапа](docs/01-roadmap.md).
+
+```powershell
+./scripts/cluster-up.ps1     # поднять кластер
+dotnet build SreAi.slnx      # собрать решение
+``` Актуальный статус по
 фазам отмечается чек-боксами прямо в роадмапе.

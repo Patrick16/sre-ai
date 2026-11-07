@@ -1,0 +1,11 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/SreAgent.Core/SreAgent.Core.csproj" />
+    <Project Path="src/SreAgent.Host/SreAgent.Host.csproj" />
+    <Project Path="src/SreAgent.LlmClients/SreAgent.LlmClients.csproj" />
+    <Project Path="src/SreAgent.Tools/SreAgent.Tools.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/SreAgent.Core.Tests/SreAgent.Core.Tests.csproj" />
+  </Folder>
+</Solution>

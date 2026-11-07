@@ -14,10 +14,12 @@
 **Понять:** что такое контейнер, образ, реестр; чем kind отличается от «настоящего» кластера.
 
 - [x] Структура репозитория и документация
-- [ ] Установить: Docker Desktop, .NET SDK, kubectl, kind, Helm, k9s (TUI для кластера)
-- [ ] Создать .NET solution (`src/SreAi.sln`) с пустыми проектами
-- [ ] Скрипт `scripts/cluster-up` / `cluster-down` (kind, 1 control-plane + 2 worker)
-- [ ] Заполнить раздел Commands в `CLAUDE.md`
+- [x] Установить: Docker Desktop, .NET SDK, kubectl, kind, Helm, k9s (TUI для кластера) — см. [09](09-dev-environment.md)
+- [x] Создать .NET solution (`SreAi.slnx` в корне) с пустыми проектами
+- [x] Скрипт `scripts/cluster-up` / `cluster-down` (kind, 1 control-plane + 2 worker)
+- [x] Заполнить раздел Commands в `CLAUDE.md`
+- [ ] Обновить kubectl до версии кластера (сейчас 1.33 против 1.37)
+- [ ] Пройти упражнения из [09-dev-environment.md](09-dev-environment.md)
 
 ## Фаза 1. Базовый Kubernetes
 

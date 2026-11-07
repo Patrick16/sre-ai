@@ -5,7 +5,7 @@
 
 | Скрипт (план) | Что делает | Фаза |
 |---|---|---|
-| `cluster-up.ps1` / `cluster-down.ps1` | Создать / удалить kind-кластер | 0 |
+| `cluster-up.ps1` / `cluster-down.ps1` ✅ | Создать / удалить kind-кластер `sre-ai` | 0 |
 | `build-images.ps1` | Собрать Docker-образы сервисов и загрузить в kind | 1 |
 | `deploy-infra.ps1` | Установить инфраструктурные Helm-чарты в правильном порядке | 3+ |
 | `deploy-apps.ps1` | Развернуть sandbox-сервисы и агента | 3+ |

@@ -1,6 +1,7 @@
 # src/
 
-.NET-решение проекта. Пока только папки-заглушки; `SreAi.sln` и `.csproj` создаются в фазе 0.
+.NET-решение проекта. Solution — `SreAi.slnx` в корне репозитория. Проекты агента созданы
+(Фаза 0), но пока пустые; код появится в Фазе 7.
 
 | Проект | Тип | Назначение | Фаза |
 |---|---|---|---|
@@ -10,7 +11,7 @@
 | `SreAgent.Host` | ASP.NET Core | Webhook для Alertmanager, BackgroundService-таймер, DI, конфиг | 7 |
 | `Sandbox.Services/*` | ASP.NET Core Minimal API | Подопытные `frontend`, `orders-api`, `worker` с режимами неисправности | 1 |
 
-Тесты будут рядом: `tests/SreAgent.Core.Tests` и т.д. (xUnit). Важнее всего покрыть
+Тесты — в `tests/` (xUnit): `tests/SreAgent.Core.Tests` уже есть. Важнее всего покрыть
 тестами guardrails и сам loop (на фейковой LLM).
 
 Зависимости: `Host → Tools, LlmClients → Core`. Подробно — [docs/02-architecture.md](../docs/02-architecture.md)
