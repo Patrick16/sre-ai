@@ -19,6 +19,12 @@ public sealed class AgentTools(IKubernetes kube, PrometheusClient prometheus, Lo
 {
     private readonly ToolsOptions _options = options.Value;
 
+    // Interpret, don't just report: in a real run the 9B model saw desired=0 plus a "SuccessfulDelete" pod event and
+    // concluded "the pod was deleted". The spec is the cause; saying so is cheaper than hoping the model infers it.
+    private const string ScaledToZero =
+        "NOTE: scaled to ZERO replicas in its spec (desired=0) - the controller deleted its pods on purpose and will not " +
+        "create any until replicas is set above 0. This is a configuration change, not a crash.";
+
     public IReadOnlyList<AIFunction> Tools =>
     [
         AIFunctionFactory.Create(ListPodsAsync, "list_pods"),
@@ -53,6 +59,7 @@ public sealed class AgentTools(IKubernetes kube, PrometheusClient prometheus, Lo
         {
             var d = await kube.AppsV1.ReadNamespacedDeploymentAsync(name, @namespace, cancellationToken: ct);
             sb.AppendLine($"Deployment {name}: desired={d.Spec.Replicas} ready={d.Status.ReadyReplicas ?? 0} updated={d.Status.UpdatedReplicas ?? 0} available={d.Status.AvailableReplicas ?? 0}");
+            if (d.Spec.Replicas == 0) sb.AppendLine(ScaledToZero);
             sb.AppendLine($"image: {string.Join(", ", d.Spec.Template.Spec.Containers.Select(c => c.Image))}");
             foreach (var c in d.Status.Conditions ?? [])
                 sb.AppendLine($"condition {c.Type}={c.Status} ({c.Reason}): {c.Message}");
@@ -71,6 +78,7 @@ public sealed class AgentTools(IKubernetes kube, PrometheusClient prometheus, Lo
         {
             var s = await kube.AppsV1.ReadNamespacedStatefulSetAsync(name, @namespace, cancellationToken: ct);
             sb.AppendLine($"StatefulSet {name}: desired={s.Spec.Replicas} ready={s.Status.ReadyReplicas ?? 0} current={s.Status.CurrentReplicas ?? 0}");
+            if (s.Spec.Replicas == 0) sb.AppendLine(ScaledToZero);
             sb.AppendLine($"image: {string.Join(", ", s.Spec.Template.Spec.Containers.Select(c => c.Image))}");
             foreach (var c in s.Status.Conditions ?? [])
                 sb.AppendLine($"condition {c.Type}={c.Status} ({c.Reason}): {c.Message}");

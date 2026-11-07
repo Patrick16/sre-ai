@@ -24,6 +24,7 @@ builder.Services.AddSingleton<IAuditLog>(sp => new FileAuditLog(Path.Combine(sp.
 builder.Services.AddSingleton<IRunStateStore>(sp => new FileRunStateStore(Path.Combine(sp.GetRequiredService<IOptions<AgentOptions>>().Value.DataDir, "state")));
 builder.Services.AddSingleton(sp => new MarkdownReportWriter(Path.Combine(sp.GetRequiredService<IOptions<AgentOptions>>().Value.DataDir, "reports")));
 builder.Services.AddSingleton<RalfIteration>();
+builder.Services.AddSingleton<RunSynthesizer>();
 builder.Services.AddSingleton<RalphLoop>();
 builder.Services.AddSingleton<RunQueue>();
 builder.Services.AddHostedService<AgentWorker>();

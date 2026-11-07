@@ -12,8 +12,10 @@ public class RalphLoopTests
         var audit = new MemoryAudit();
         var states = new MemoryStateStore();
         var collector = new FakeCollector();
-        var iteration = new RalfIteration(collector, new FixedFactory(client), new FakeToolset(tools), audit, NullLoggerFactory.Instance, TimeProvider.System);
-        var loop = new RalphLoop(iteration, completion, states, audit, TimeProvider.System, NullLogger<RalphLoop>.Instance);
+        var factory = new FixedFactory(client);
+        var iteration = new RalfIteration(collector, factory, new FakeToolset(tools), audit, NullLoggerFactory.Instance, TimeProvider.System);
+        var synthesizer = new RunSynthesizer(factory, audit, TimeProvider.System, NullLogger<RunSynthesizer>.Instance);
+        var loop = new RalphLoop(iteration, completion, states, synthesizer, audit, TimeProvider.System, NullLogger<RalphLoop>.Instance);
         return (loop, audit, states, collector);
     }
 

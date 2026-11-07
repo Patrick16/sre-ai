@@ -72,7 +72,15 @@ public sealed class ObservationCollector(IKubernetes kube, PrometheusClient prom
         {
             var (samples, error) = await prometheus.QueryAsync($"pg_up{{namespace=\"{ns}\"}}", ct);
             if (error is not null) return $"unavailable: {error}";
-            return samples.Count == 0 ? "pg_up: no series (exporter not running - is the postgres pod gone?)" : $"pg_up = {samples[0].Value}";
+            var text = samples.Count == 0 ? "pg_up: no series (exporter not running - is the postgres pod gone?)" : $"pg_up = {samples[0].Value}";
+            try
+            {
+                var sts = await kube.AppsV1.ReadNamespacedStatefulSetAsync("postgres", ns, cancellationToken: ct);
+                text += $"\nStatefulSet postgres: desired={sts.Spec.Replicas} ready={sts.Status.ReadyReplicas ?? 0}" +
+                        (sts.Spec.Replicas == 0 ? " - scaled to ZERO in its spec (a configuration change, not a crash)" : "");
+            }
+            catch (k8s.Autorest.HttpOperationException) { }
+            return text;
         });
 
         await Section(sb, "Warnings/errors in logs, last 10 min (newest first)", async () =>

@@ -4,7 +4,7 @@ replicas: 1
 
 image:
   repository: sre-agent/host
-  tag: "0.2.3"   # 0.2.0: observe-only; 0.2.1: survives model failures; 0.2.2/0.2.3: steady state = symptom alerts gone + SLIs OK now
+  tag: "0.3.1"   # 0.2.x: observe-only; 0.3.0: facts in RunState + final synthesis; 0.3.1: per-iteration fact cap, "scaled to zero" hint
 
 # The agent reads the Kubernetes API, so it needs a token - with read-only rights in sandbox and nothing else.
 serviceAccount:

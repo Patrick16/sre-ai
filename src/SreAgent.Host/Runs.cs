@@ -63,7 +63,7 @@ public sealed class RunQueue(IOptions<AgentOptions> options, TimeProvider time)
             Status = "finished",
             FinishedAt = run.FinishedAt,
             Iterations = run.Iterations.Count,
-            Hypothesis = run.Iterations.LastOrDefault()?.Analysis.Hypothesis,
+            Hypothesis = run.Synthesis?.RootCause ?? run.Iterations.LastOrDefault()?.Analysis.Hypothesis,
             Outcome = run.Outcome?.ToString(),
             OutcomeReason = run.OutcomeReason,
             ReportPath = run.ReportPath,

@@ -34,8 +34,11 @@ internal sealed class ScriptedChatClient(params Func<IList<ChatMessage>, ChatRes
     public static Func<IList<ChatMessage>, ChatResponse> CallTool(string tool, Dictionary<string, object?>? args = null) =>
         _ => new ChatResponse(new ChatMessage(ChatRole.Assistant, [new FunctionCallContent(Guid.NewGuid().ToString("N"), tool, args ?? [])]));
 
-    public static string Json(string hypothesis, string confidence = "medium") =>
-        $$"""{"summary":"s","hypothesis":"{{hypothesis}}","confidence":"{{confidence}}","evidence":["e1"],"recommendations":["r1"],"next_checks":["n1"]}""";
+    public static string Json(string hypothesis, string confidence = "medium", string? fact = null) =>
+        $$"""{"summary":"s","hypothesis":"{{hypothesis}}","confidence":"{{confidence}}","evidence":["e1"],"facts":[{{(fact is null ? "" : $"\"{fact}\"")}}],"recommendations":["r1"],"next_checks":["n1"]}""";
+
+    public static string SynthesisJson(string rootCause) =>
+        $$"""{"summary":"sum","root_cause":"{{rootCause}}","confidence":"high","timeline":["21:47Z - db scaled to 0"],"evidence":["desired=0"],"recommendations":["r"],"disagreements":"iteration 8 contradicted 3-4"}""";
 }
 
 internal sealed class FixedFactory(IChatClient client) : IChatClientFactory

@@ -37,7 +37,25 @@ public sealed record Analysis(
     IReadOnlyList<string> Recommendations,
     IReadOnlyList<string> NextChecks,
     bool Parsed,
-    string RawText);
+    string RawText)
+{
+    /// <summary>Facts the model verified in this iteration, each with its evidence. Carried over in RunState.</summary>
+    public IReadOnlyList<string> Facts { get; init; } = [];
+}
+
+/// <summary>
+/// The run-level conclusion, written once after the loop over ALL iterations: the last iteration alone is the worst
+/// judge of the cause - after recovery it only sees the aftermath.
+/// </summary>
+public sealed record RunSynthesis(
+    string Summary,
+    string RootCause,
+    string Confidence,
+    IReadOnlyList<string> Timeline,
+    IReadOnlyList<string> Evidence,
+    IReadOnlyList<string> Recommendations,
+    string Disagreements,
+    bool Parsed);
 
 public sealed record CompletionStatus(bool Done, string Reason);
 
@@ -66,5 +84,7 @@ public sealed class AgentRun(TaskSpec task, DateTimeOffset startedAt)
     public RunOutcome? Outcome { get; set; }
     public string OutcomeReason { get; set; } = "";
     public List<IterationResult> Iterations { get; } = [];
+    public IReadOnlyList<string> Facts { get; set; } = [];
+    public RunSynthesis? Synthesis { get; set; }
     public string? ReportPath { get; set; }
 }

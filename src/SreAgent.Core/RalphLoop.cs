@@ -10,6 +10,7 @@ public sealed class RalphLoop(
     RalfIteration iteration,
     ICompletionCheck completion,
     IRunStateStore states,
+    RunSynthesizer synthesizer,
     IAuditLog audit,
     TimeProvider time,
     ILogger<RalphLoop> log)
@@ -87,6 +88,10 @@ public sealed class RalphLoop(
             log.LogError(ex, "Run {RunId} failed", task.Id);
             Finish(run, RunOutcome.Failed, $"{ex.GetType().Name}: {ex.Message}");
         }
+
+        run.Facts = state.Facts.Select(f => $"[{f.At:HH:mm:ss}Z, iteration {f.Iteration}] {f.Text}").ToList();
+        if (run.Outcome != RunOutcome.Cancelled)
+            run.Synthesis = await synthesizer.SynthesizeAsync(run, model, ct);
 
         await audit.WriteAsync(new AuditEvent(time.GetUtcNow(), task.Id, run.Iterations.Count, "run.finished",
             new { outcome = run.Outcome.ToString(), reason = run.OutcomeReason }), CancellationToken.None);

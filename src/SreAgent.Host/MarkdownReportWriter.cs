@@ -29,23 +29,60 @@ public sealed partial class MarkdownReportWriter(string directory)
         sb.AppendLine($"- Actions: {RalfIteration.ObserveOnlyLead}");
         sb.AppendLine();
 
-        if (last is not null)
+        if (run.Synthesis is { } s)
+        {
+            sb.AppendLine("## Кратко");
+            sb.AppendLine(s.Summary);
+            sb.AppendLine();
+            sb.AppendLine("## Причина");
+            sb.AppendLine($"**{s.RootCause}** _(уверенность: {s.Confidence}; итог по всем итерациям — синтез после завершения цикла)_");
+            sb.AppendLine();
+            if (s.Timeline.Count > 0)
+            {
+                sb.AppendLine("## Как развивался инцидент");
+                foreach (var t in s.Timeline) sb.AppendLine($"- {t}");
+                sb.AppendLine();
+            }
+            if (s.Evidence.Count > 0)
+            {
+                sb.AppendLine("**Доказательства:**");
+                foreach (var e in s.Evidence) sb.AppendLine($"- {e}");
+                sb.AppendLine();
+            }
+            if (!string.IsNullOrWhiteSpace(s.Disagreements))
+            {
+                sb.AppendLine("## Расхождения между итерациями");
+                sb.AppendLine(s.Disagreements);
+                sb.AppendLine();
+            }
+            sb.AppendLine("## Рекомендации");
+            foreach (var r in s.Recommendations.DefaultIfEmpty("—")) sb.AppendLine($"- {r}");
+            sb.AppendLine();
+        }
+        else if (last is not null)
         {
             var a = last.Analysis;
             sb.AppendLine("## Кратко");
             sb.AppendLine(a.Summary);
             sb.AppendLine();
-            sb.AppendLine("## Анализ (последняя итерация)");
+            sb.AppendLine("## Анализ (последняя итерация — синтез по всему прогону не получился)");
             sb.AppendLine($"**Гипотеза:** {a.Hypothesis} _(уверенность: {a.Confidence}{(a.Parsed ? "" : ", ответ модели не был структурирован")})_");
             sb.AppendLine();
             if (a.Evidence.Count > 0)
             {
-                sb.AppendLine("**Факты:**");
+                sb.AppendLine("**Доказательства:**");
                 foreach (var e in a.Evidence) sb.AppendLine($"- {e}");
                 sb.AppendLine();
             }
             sb.AppendLine("## Рекомендации");
             foreach (var r in a.Recommendations.DefaultIfEmpty("—")) sb.AppendLine($"- {r}");
+            sb.AppendLine();
+        }
+
+        if (run.Facts.Count > 0)
+        {
+            sb.AppendLine("## Установленные факты (проверены в ходе прогона)");
+            foreach (var f in run.Facts) sb.AppendLine($"- {f}");
             sb.AppendLine();
         }
 

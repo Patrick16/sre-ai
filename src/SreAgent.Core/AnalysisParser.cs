@@ -32,7 +32,8 @@ public static partial class AnalysisParser
                         List(root, "recommendations"),
                         List(root, "next_checks"),
                         Parsed: true,
-                        RawText: text);
+                        RawText: text)
+                    { Facts = List(root, "facts") };
                 }
             }
             catch (JsonException)
@@ -46,6 +47,33 @@ public static partial class AnalysisParser
         return new Analysis(preview, "(the model did not return a structured answer)", "low", [], [], [], Parsed: false, RawText: text);
     }
 
+    public static RunSynthesis? ParseSynthesis(string? text)
+    {
+        var cleaned = ThinkBlock().Replace(text ?? "", "");
+        var start = cleaned.IndexOf('{');
+        var end = cleaned.LastIndexOf('}');
+        if (start < 0 || end <= start) return null;
+        try
+        {
+            using var doc = JsonDocument.Parse(cleaned[start..(end + 1)]);
+            var root = doc.RootElement;
+            if (root.ValueKind != JsonValueKind.Object || !root.TryGetProperty("root_cause", out _)) return null;
+            return new RunSynthesis(
+                Str(root, "summary"),
+                Str(root, "root_cause"),
+                NormalizeConfidence(Str(root, "confidence")),
+                List(root, "timeline"),
+                List(root, "evidence"),
+                List(root, "recommendations"),
+                Str(root, "disagreements"),
+                Parsed: true);
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
     private static string Str(JsonElement root, string name) =>
         root.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString()!.Trim() : "";
 
@@ -54,9 +82,24 @@ public static partial class AnalysisParser
         if (!root.TryGetProperty(name, out var v)) return [];
         return v.ValueKind switch
         {
-            JsonValueKind.Array => v.EnumerateArray().Where(e => e.ValueKind == JsonValueKind.String).Select(e => e.GetString()!.Trim()).Where(s => s.Length > 0).ToList(),
+            JsonValueKind.Array => v.EnumerateArray().Select(ItemText).Where(s => s.Length > 0).ToList(),
             JsonValueKind.String => [v.GetString()!.Trim()],
             _ => [],
+        };
+    }
+
+    // Models sometimes answer ["a", "b"] and sometimes [{"fact": "a", "evidence": "b"}]: accept both.
+    private static string ItemText(JsonElement e)
+    {
+        if (e.ValueKind == JsonValueKind.String) return e.GetString()!.Trim();
+        if (e.ValueKind != JsonValueKind.Object) return "";
+        var parts = e.EnumerateObject().Where(p => p.Value.ValueKind == JsonValueKind.String)
+            .Select(p => p.Value.GetString()!.Trim()).Where(s => s.Length > 0).ToList();
+        return parts.Count switch
+        {
+            0 => "",
+            1 => parts[0],
+            _ => $"{parts[0]} ({string.Join("; ", parts.Skip(1))})",
         };
     }
 
