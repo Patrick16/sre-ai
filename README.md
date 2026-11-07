@@ -44,7 +44,15 @@ Retrieve → Analyze → Lead → Feedback, см. [docs/05-agent-architecture.md
 ([docs/09](docs/09-dev-environment.md)), три sandbox-сервиса ([docs/10](docs/10-phase-1-kubernetes-basics.md)),
 Traefik + cert-manager и HTTPS на `https://sandbox.localhost` ([docs/11](docs/11-phase-2-ingress-tls.md)),
 свой Helm-чарт и релиз на каждый сервис ([docs/12](docs/12-phase-3-helm.md)), PostgreSQL на StatefulSet
-с постоянным томом ([docs/13](docs/13-phase-4-storage.md)). Дальше — Фаза 5 (observability).
+с постоянным томом ([docs/13](docs/13-phase-4-storage.md)), мониторинг, логи, SLO и алерты с доставкой
+в заглушку агента ([docs/14](docs/14-phase-5-observability.md)). Дальше — Фаза 6 (NetworkPolicy, mTLS, service mesh).
+
+| UI | Адрес |
+|---|---|
+| Приложение | https://sandbox.localhost |
+| Grafana | https://grafana.localhost (`admin`, пароль: `./scripts/grafana-password.ps1`) |
+| Prometheus | https://prometheus.localhost |
+| Alertmanager | https://alertmanager.localhost |
 Код, манифесты и чарты появляются по мере прохождения фаз из [роадмапа](docs/01-roadmap.md).
 
 ```powershell

@@ -46,6 +46,15 @@ providers:
 accessLog:
   enabled: true
 
+# Edge metrics (requests/latency/5xx per router and backend) for Prometheus. Needs the Prometheus Operator
+# CRDs, so deploy-infra.ps1 installs kube-prometheus-stack before Traefik.
+metrics:
+  prometheus:
+    service:
+      enabled: true
+    serviceMonitor:
+      enabled: true
+
 # Dashboard only on the internal "traefik" entrypoint (port 8080, not exposed): reach it with
 #   kubectl port-forward -n traefik deploy/traefik 9000:8080  ->  http://localhost:9000/dashboard/
 ingressRoute:

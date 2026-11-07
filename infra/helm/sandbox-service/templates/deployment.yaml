@@ -44,6 +44,10 @@ spec:
           ports:
             - name: http
               containerPort: {{ .Values.containerPort }}
+            {{- if .Values.metrics.enabled }}
+            - name: metrics
+              containerPort: {{ .Values.metrics.port }}
+            {{- end }}
           {{- if .Values.configEnv }}
           envFrom:
             - configMapRef:
@@ -52,6 +56,10 @@ spec:
           env:
             - name: APP_VERSION
               value: {{ $tag | quote }}
+            {{- if .Values.metrics.enabled }}
+            - name: ASPNETCORE_HTTP_PORTS
+              value: "{{ .Values.containerPort }};{{ .Values.metrics.port }}"
+            {{- end }}
             {{- if .Values.configFiles.files }}
             # ConfigMap volumes are updated via symlink swaps that inotify misses; polling sees them.
             - name: DOTNET_USE_POLLING_FILE_WATCHER

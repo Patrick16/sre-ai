@@ -1,0 +1,15 @@
+enabled: true          # false = stop the traffic (replicas 0)
+image: grafana/k6:2.3.0
+ratePerSecond: 5       # requests per second, regardless of how slow responses get (constant-arrival-rate)
+postShare: 0.2         # share of requests that create an order; the rest are GET /
+
+# Through Traefik, like real users: edge metrics, TLS and routing are part of what gets measured.
+target: https://traefik.traefik.svc.cluster.local
+host: sandbox.localhost
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 64Mi
+  limits:
+    memory: 256Mi

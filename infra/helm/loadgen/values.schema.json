@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "enabled": { "type": "boolean" },
+    "image": { "type": "string", "not": { "pattern": ":latest$" } },
+    "ratePerSecond": { "type": "integer", "minimum": 1, "maximum": 200 },
+    "postShare": { "type": "number", "minimum": 0, "maximum": 1 },
+    "target": { "type": "string" },
+    "host": { "type": "string" },
+    "resources": { "type": "object" }
+  }
+}

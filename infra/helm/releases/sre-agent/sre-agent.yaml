@@ -1,0 +1,7 @@
+# helm upgrade --install sre-agent infra/helm/sandbox-service -n sre-agent -f infra/helm/releases/sre-agent/sre-agent.yaml
+# Phase 5: only the Alertmanager webhook stub (logs alerts, GET /alerts). The real agent arrives in Phase 7.
+replicas: 1
+
+image:
+  repository: sre-agent/host
+  tag: "0.1.0"

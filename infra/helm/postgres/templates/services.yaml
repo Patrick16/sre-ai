@@ -15,7 +15,7 @@ spec:
       port: 5432
       targetPort: postgres
 ---
-# Regular Service for clients: `postgres:5432`.
+# Regular Service for clients: `postgres:5432` (and the exporter's metrics port for the ServiceMonitor).
 apiVersion: v1
 kind: Service
 metadata:
@@ -30,3 +30,28 @@ spec:
     - name: postgres
       port: 5432
       targetPort: postgres
+    {{- if .Values.metrics.enabled }}
+    - name: metrics
+      port: {{ .Values.metrics.port }}
+      targetPort: metrics
+    {{- end }}
+{{- if and .Values.metrics.enabled (.Capabilities.APIVersions.Has "monitoring.coreos.com/v1/ServiceMonitor") }}
+---
+# ServiceMonitor = "scrape the endpoints behind Services matching this selector, on this port".
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ .Release.Name }}
+  labels:
+    {{- include "postgres.labels" . | nindent 4 }}
+spec:
+  selector:
+    matchLabels:
+      {{- include "postgres.selectorLabels" . | nindent 6 }}
+  endpoints:
+    - port: metrics
+      interval: 15s
+      relabelings:
+        - sourceLabels: [__meta_kubernetes_pod_label_app_kubernetes_io_name]
+          targetLabel: app
+{{- end }}

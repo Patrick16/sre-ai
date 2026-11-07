@@ -1,8 +1,11 @@
+using System.Diagnostics.Metrics;
 using System.Security.Cryptography;
 using System.Text;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Options;
 using Npgsql;
+using OpenTelemetry.Metrics;
+using OpenTelemetry.Resources;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -21,6 +24,9 @@ builder.Services.AddSingleton(sp =>
         Password = db["Password"],
         Timeout = 5,
         CommandTimeout = 5,
+        // Npgsql otherwise tries Kerberos/GSSAPI encryption first; the image has no libgssapi, so every new
+        // connection printed "libgssapi_krb5.so.2: cannot open shared object file" to stderr.
+        GssEncryptionMode = GssEncryptionMode.Disable,
     };
     return NpgsqlDataSource.Create(cs);
 });
@@ -29,8 +35,20 @@ builder.Services.AddSingleton<ApiKeyValidator>();
 builder.Services.AddSingleton<Ballast>();
 builder.Services.AddHealthChecks()
     .AddCheck<DatabaseHealthCheck>("database", tags: ["db"]);
+builder.Services.AddSingleton<OrdersMetrics>();
+builder.Services.AddOpenTelemetry()
+    .ConfigureResource(r => r.AddService("orders-api"))
+    .WithMetrics(m => m
+        // Built-in .NET meters: HTTP server, Kestrel, GC/threads/memory, Npgsql connection pool.
+        .AddMeter("Microsoft.AspNetCore.Hosting", "Microsoft.AspNetCore.Server.Kestrel", "System.Runtime", "Npgsql")
+        .AddMeter(OrdersMetrics.MeterName)
+        .AddPrometheusExporter());
 
 var app = builder.Build();
+
+// Only on the metrics port, which the Service/Ingress for traffic doesn't route: metrics must not be public.
+// LocalPort (the socket actually used), not the Host header, which a client controls.
+app.UseOpenTelemetryPrometheusScrapingEndpoint(ctx => ctx.Connection.LocalPort == 9090 && ctx.Request.Path == "/metrics");
 var pod = Environment.MachineName;
 
 app.Use(async (ctx, next) =>
@@ -77,14 +95,19 @@ var orders = app.MapGroup("/orders")
 
 orders.MapGet("/", (OrderStore store, string? status, CancellationToken ct) => store.ListAsync(status, ct));
 
-orders.MapPost("/", async (OrderStore store, NewOrder input, CancellationToken ct) =>
+orders.MapPost("/", async (OrderStore store, OrdersMetrics metrics, NewOrder input, CancellationToken ct) =>
 {
     var order = await store.AddAsync(input.Item, pod, ct);
+    metrics.Created.Add(1);
     return Results.Created($"/orders/{order.Id}", order);
 });
 
-orders.MapPost("/{id:guid}/process", async (OrderStore store, Guid id, CancellationToken ct) =>
-    await store.TryProcessAsync(id, ct) is { } order ? Results.Ok(order) : Results.NotFound());
+orders.MapPost("/{id:guid}/process", async (OrderStore store, OrdersMetrics metrics, Guid id, CancellationToken ct) =>
+{
+    if (await store.TryProcessAsync(id, ct) is not { } order) return Results.NotFound();
+    metrics.Processed.Add(1);
+    return Results.Ok(order);
+});
 
 // Holds memory on purpose so the container can be pushed past its memory limit (OOMKilled exercise).
 app.MapPost("/debug/allocate", (Ballast ballast, int mb) => new { allocatedMb = ballast.Add(mb) });
@@ -94,6 +117,21 @@ app.Run();
 record NewOrder(string Item);
 
 record Order(Guid Id, string Item, string Status, string CreatedByPod, DateTimeOffset CreatedAt);
+
+class OrdersMetrics
+{
+    public const string MeterName = "Sandbox.Orders";
+
+    public OrdersMetrics(IMeterFactory factory)
+    {
+        var meter = factory.Create(MeterName);
+        Created = meter.CreateCounter<long>("sandbox.orders.created", description: "Orders accepted");
+        Processed = meter.CreateCounter<long>("sandbox.orders.processed", description: "Orders marked processed");
+    }
+
+    public Counter<long> Created { get; }
+    public Counter<long> Processed { get; }
+}
 
 class OrdersOptions
 {

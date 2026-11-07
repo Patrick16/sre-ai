@@ -1,0 +1,6 @@
+apiVersion: v2
+name: loadgen
+description: Constant background traffic through the Ingress (k6), so that metrics, SLOs and alerts have data.
+type: application
+version: 0.1.1
+appVersion: "2.3.0"

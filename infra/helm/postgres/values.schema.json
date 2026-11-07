@@ -12,6 +12,16 @@
         "pullPolicy": { "enum": ["IfNotPresent", "Always", "Never"] }
       }
     },
+    "replicas": { "type": "integer", "enum": [0, 1] },
+    "metrics": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "image": { "type": "string" },
+        "port": { "type": "integer" }
+      }
+    },
     "database": { "type": "string", "minLength": 1 },
     "username": { "type": "string", "minLength": 1 },
     "passwordSecret": {

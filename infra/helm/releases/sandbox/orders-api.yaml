@@ -3,7 +3,13 @@ replicas: 3
 
 image:
   repository: sandbox/orders-api
-  tag: "0.2.1"   # 0.2.x: orders stored in PostgreSQL instead of pod memory; 0.2.1: recreate schema if the DB was replaced
+  tag: "0.3.1"   # 0.2.x: PostgreSQL; 0.3.0: OpenTelemetry metrics on :9090, JSON logs; 0.3.1: no GSSAPI probing
+
+# 99% of requests must be non-5xx and faster than 250 ms (0.25 is a bucket boundary of http.server.request.duration).
+slo:
+  enabled: true
+  objective: 0.99
+  latencyThresholdSeconds: "0.25"
 
 rollingUpdate:
   maxUnavailable: 0   # never drop below 3 ready pods during an update

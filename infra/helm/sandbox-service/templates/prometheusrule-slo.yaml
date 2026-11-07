@@ -1,0 +1,61 @@
+{{- if and .Values.slo.enabled (.Capabilities.APIVersions.Has "monitoring.coreos.com/v1/PrometheusRule") }}
+{{- $name := include "sandbox-service.name" . -}}
+{{- /* Real routes only: requests without http_route are Prometheus scrapes of /metrics and unmatched 404s. */ -}}
+{{- $sel := printf "namespace=%q, app=%q, http_route=~%q, http_route!~%q" .Release.Namespace $name ".+" "/health.*" -}}
+{{- $budget := round (subf 1.0 .Values.slo.objective) 6 -}}
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: {{ $name }}-slo
+  labels:
+    {{- include "sandbox-service.labels" . | nindent 4 }}
+spec:
+  groups:
+    - name: {{ $name }}-slo-recording
+      rules:
+        {{- range list "5m" "30m" "1h" "2h" "6h" "1d" "3d" }}
+        # Share of BAD requests (5xx or slower than {{ $.Values.slo.latencyThresholdSeconds }}s) over {{ . }}.
+        # "or vector(0)": during a total outage there are NO good requests, the good-side sum is empty, and
+        # without it the whole expression would be empty too - i.e. no alert exactly when it matters most.
+        - record: slo:sli_error:ratio_rate{{ . }}
+          expr: |
+            (
+              sum(rate(http_server_request_duration_seconds_count{ {{- $sel -}} }[{{ . }}]))
+              -
+              (sum(rate(http_server_request_duration_seconds_bucket{ {{- $sel -}}, le={{ $.Values.slo.latencyThresholdSeconds | quote }}, http_response_status_code!~"5.."}[{{ . }}])) or vector(0))
+            )
+            /
+            sum(rate(http_server_request_duration_seconds_count{ {{- $sel -}} }[{{ . }}]))
+          labels:
+            slo: {{ $name }}
+            namespace: {{ $.Release.Namespace }}
+        {{- end }}
+    - name: {{ $name }}-slo-alerts
+      rules:
+        # Burn rate = how many times faster than "exactly on budget" the error budget is being spent.
+        # Each alert needs BOTH a long window (it's significant) and a short one (it's still happening).
+        {{- range list
+              (dict "name" "ErrorBudgetBurnFast" "long" "1h" "short" "5m"  "rate" 14.4 "for" "2m"  "severity" "critical" "spent" "2% of the 30d budget in 1h")
+              (dict "name" "ErrorBudgetBurnFast" "long" "6h" "short" "30m" "rate" 6.0  "for" "15m" "severity" "critical" "spent" "5% of the 30d budget in 6h")
+              (dict "name" "ErrorBudgetBurnSlow" "long" "1d" "short" "2h"  "rate" 3.0  "for" "1h"  "severity" "warning"  "spent" "10% of the 30d budget in 1d")
+              (dict "name" "ErrorBudgetBurnSlow" "long" "3d" "short" "6h"  "rate" 1.0  "for" "3h"  "severity" "warning"  "spent" "10% of the 30d budget in 3d") }}
+        - alert: {{ $name | title | replace "-" "" }}{{ .name }}
+          expr: |
+            slo:sli_error:ratio_rate{{ .long }}{slo="{{ $name }}"} > ({{ .rate }} * {{ $budget }})
+            and
+            slo:sli_error:ratio_rate{{ .short }}{slo="{{ $name }}"} > ({{ .rate }} * {{ $budget }})
+          for: {{ .for }}
+          labels:
+            severity: {{ .severity }}
+            slo: {{ $name }}
+            namespace: {{ $.Release.Namespace }}
+            app: {{ $name }}
+            window: {{ .long }}
+          annotations:
+            summary: "{{ $name }} is burning its error budget {{ .rate }}x too fast ({{ .long }} window)"
+            description: >-
+              {{ "{{" }} $value | humanizePercentage {{ "}}" }} of {{ $name }} requests over the last {{ .long }} are bad
+              (5xx or slower than {{ $.Values.slo.latencyThresholdSeconds }}s); the SLO allows {{ mulf $budget 100 }}%.
+              At this rate {{ .spent }} is consumed.
+        {{- end }}
+{{- end }}

@@ -3,7 +3,13 @@ replicas: 2
 
 image:
   repository: sandbox/frontend
-  tag: "0.1.0"
+  tag: "0.3.0"   # 0.3.0: OpenTelemetry metrics on :9090, JSON logs
+
+# The user-facing SLO: includes the time frontend waits for orders-api.
+slo:
+  enabled: true
+  objective: 0.99
+  latencyThresholdSeconds: "0.5"
 
 configEnv:
   Frontend__Greeting: "Hello from Kubernetes"

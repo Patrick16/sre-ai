@@ -68,12 +68,15 @@
 
 **Понять:** метрики vs логи vs трейсы, pull-модель Prometheus, PromQL, SLI/SLO, алерты.
 
-- [ ] kube-prometheus-stack (Prometheus, Alertmanager, Grafana, node-exporter, kube-state-metrics)
-- [ ] Метрики из .NET-сервисов (OpenTelemetry / prometheus-net) + ServiceMonitor
-- [ ] Loki + сборщик логов, структурные логи из сервисов
-- [ ] Дашборд «Golden signals» (latency, traffic, errors, saturation) для каждого сервиса
-- [ ] SLO для `orders-api` (например, 99% запросов < 300 мс) и алерты по burn rate
-- [ ] Alertmanager → webhook (пока заглушка, позже — агент)
+- [x] kube-prometheus-stack (Prometheus на PVC, Alertmanager, Grafana по HTTPS, node-exporter, kube-state-metrics) — см. [14](14-phase-5-observability.md)
+- [x] Метрики из .NET-сервисов (OpenTelemetry, отдельный порт 9090) + PodMonitor; postgres-exporter + ServiceMonitor; метрики Traefik и cert-manager
+- [x] Loki + Grafana Alloy (DaemonSet), структурные JSON-логи из сервисов
+- [x] Дашборд «Golden signals» (latency, traffic, errors, saturation + burn rate, зависимости, логи)
+- [x] SLO для `orders-api` (99% < 250 мс — граница bucket'а) и `frontend` (99% < 500 мс), multi-window burn-rate алерты; `PostgresDown`
+- [x] Alertmanager → webhook заглушки агента (`SreAgent.Host`); сквозной сценарий «база упала → алерт → агент» проверен
+- [x] Фоновая нагрузка (k6, ~5 rps через Traefik)
+- [ ] Упражнения из [14-phase-5-observability.md](14-phase-5-observability.md): silence, SLO по латентности, LogQL
+- [ ] (Опционально) трейсы: OpenTelemetry → Tempo
 
 ## Фаза 6. Безопасность сети: NetworkPolicy, mTLS, Service Mesh
 

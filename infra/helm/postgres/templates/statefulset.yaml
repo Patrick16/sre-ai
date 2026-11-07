@@ -5,8 +5,8 @@ metadata:
   labels:
     {{- include "postgres.labels" . | nindent 4 }}
 spec:
-  # Single primary. Running 2 replicas of this would give two independent databases, not replication.
-  replicas: 1
+  # Single primary (or 0 = stopped). Running 2 replicas of this would give two independent databases, not replication.
+  replicas: {{ .Values.replicas }}
   serviceName: {{ .Release.Name }}-headless
   selector:
     matchLabels:
@@ -73,6 +73,36 @@ spec:
             readOnlyRootFilesystem: true
             capabilities:
               drop: ["ALL"]
+        {{- if .Values.metrics.enabled }}
+        # Sidecar: same pod, so it reaches postgres on localhost and lives/dies with it.
+        - name: postgres-exporter
+          image: {{ .Values.metrics.image }}
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: metrics
+              containerPort: {{ .Values.metrics.port }}
+          env:
+            - name: DATA_SOURCE_URI
+              value: "127.0.0.1:5432/{{ .Values.database }}?sslmode=disable"
+            - name: DATA_SOURCE_USER
+              value: {{ .Values.username | quote }}
+            - name: DATA_SOURCE_PASS
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.passwordSecret.name }}
+                  key: {{ .Values.passwordSecret.key }}
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              memory: 128Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+        {{- end }}
       volumes:
         - name: run
           emptyDir: {}

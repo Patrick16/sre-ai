@@ -1,0 +1,18 @@
+{{- range $path, $_ := .Files.Glob "dashboards/*.json" }}
+---
+# Grafana's sidecar watches ConfigMaps with grafana_dashboard=1 (any namespace) and loads them; edits in the
+# Grafana UI are lost on the next reload - change the JSON file here instead.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dashboard-{{ base $path | trimSuffix ".json" }}
+  labels:
+    grafana_dashboard: "1"
+    app.kubernetes.io/part-of: sandbox
+    app.kubernetes.io/managed-by: {{ $.Release.Service }}
+  annotations:
+    grafana_folder: Sandbox
+data:
+  {{ base $path }}: |-
+    {{- $.Files.Get $path | nindent 4 }}
+{{- end }}

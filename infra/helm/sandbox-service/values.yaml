@@ -69,6 +69,21 @@ shutdownDelaySeconds: 5
 # Prefer putting replicas on different nodes.
 spreadAcrossNodes: false
 
+# Prometheus metrics on a separate port: not part of the Service port used by Ingress, so never public.
+# A PodMonitor tells the Prometheus Operator to scrape it (only rendered if the CRD exists).
+metrics:
+  enabled: true
+  port: 9090
+  path: /metrics
+
+# Service Level Objective -> recording rules + multi-window multi-burn-rate alerts (Google SRE Workbook).
+# A request is "good" if it is not a 5xx AND finishes within latencyThresholdSeconds.
+# latencyThresholdSeconds must be an existing histogram bucket boundary (le label), e.g. "0.25", "0.5".
+slo:
+  enabled: false
+  objective: 0.99
+  latencyThresholdSeconds: "0.25"
+
 ingress:
   enabled: false
   host: ""

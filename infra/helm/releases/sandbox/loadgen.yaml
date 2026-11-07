@@ -1,0 +1,3 @@
+# helm upgrade --install loadgen infra/helm/loadgen -n sandbox -f infra/helm/releases/sandbox/loadgen.yaml
+enabled: true
+ratePerSecond: 5

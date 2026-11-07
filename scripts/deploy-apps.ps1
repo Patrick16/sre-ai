@@ -1,17 +1,22 @@
 #Requires -Version 7
-# App layer: one Helm release per component in namespace sandbox.
-# Assumes scripts/deploy-infra.ps1 has run and images are loaded (scripts/build-images.ps1).
+# App layer: one Helm release per component. Release values live in infra/helm/releases/<namespace>/<release>.yaml;
+# the folder name is the namespace. Assumes scripts/deploy-infra.ps1 has run and images are loaded
+# (scripts/build-images.ps1).
 [CmdletBinding()]
 param(
-    # Order matters: the database first, then its clients.
-    [string[]]$Services = @('postgres', 'orders-api', 'worker', 'frontend')
+    # Order matters: the database first, then its clients, then traffic, then the agent.
+    [string[]]$Services = @('postgres', 'orders-api', 'worker', 'frontend', 'loadgen', 'sre-agent')
 )
 $ErrorActionPreference = 'Stop'
 
 $root     = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
-$releases = Join-Path $root 'infra' 'helm' 'releases' 'sandbox'
-$charts   = @{ 'postgres' = Join-Path $root 'infra' 'helm' 'postgres' }
-$default  = Join-Path $root 'infra' 'helm' 'sandbox-service'
+$helm     = Join-Path $root 'infra' 'helm'
+$releases = Join-Path $helm 'releases'
+$charts   = @{
+    'postgres' = Join-Path $helm 'postgres'
+    'loadgen'  = Join-Path $helm 'loadgen'
+}
+$default  = Join-Path $helm 'sandbox-service'
 
 # Secrets are generated here (random values) so they never land in git. Existing ones are kept:
 # regenerating the DB password would lock the apps out of an already-initialised database.
@@ -25,12 +30,13 @@ New-SecretIfMissing 'sandbox-api-key' 'api-key'
 New-SecretIfMissing 'postgres-credentials' 'password'
 
 foreach ($service in $Services) {
-    $valuesFile = Join-Path $releases "$service.yaml"
-    if (-not (Test-Path $valuesFile)) { throw "No values file for '$service' at $valuesFile" }
+    $valuesFile = Get-ChildItem $releases -Recurse -Filter "$service.yaml" | Select-Object -First 1
+    if (-not $valuesFile) { throw "No values file for '$service' under $releases" }
+    $namespace = $valuesFile.Directory.Name
     $chart = $charts[$service] ?? $default
 
     # --rollback-on-failure: if pods don't become ready in time, Helm reverts to the last good revision.
-    helm upgrade --install $service $chart -n sandbox -f $valuesFile --wait --rollback-on-failure --timeout 5m
+    helm upgrade --install $service $chart -n $namespace -f $valuesFile.FullName --wait --rollback-on-failure --timeout 5m
     if ($LASTEXITCODE -ne 0) { throw "helm upgrade $service failed (rolled back)" }
 }
 
@@ -39,4 +45,4 @@ if ($Services -contains 'frontend') {
     if ($LASTEXITCODE -ne 0) { throw 'sandbox-tls certificate not ready' }
 }
 
-helm list -n sandbox
+helm list -A --filter '^(postgres|orders-api|worker|frontend|loadgen|sre-agent)$'

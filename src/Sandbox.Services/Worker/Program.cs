@@ -1,9 +1,13 @@
+using System.Diagnostics.Metrics;
 using System.Net.Http.Json;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
+using OpenTelemetry.Metrics;
+using OpenTelemetry.Resources;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddSingleton<Heartbeat>();
+builder.Services.AddSingleton<WorkerMetrics>();
 builder.Services.AddHostedService<OrderProcessor>();
 builder.Services.AddHealthChecks().AddCheck<HeartbeatHealthCheck>("processing-loop", tags: ["live"]);
 builder.Services.AddHttpClient("orders-api", (sp, client) =>
@@ -13,8 +17,16 @@ builder.Services.AddHttpClient("orders-api", (sp, client) =>
     client.DefaultRequestHeaders.Add("X-Api-Key", config["OrdersApi:ApiKey"]);
     client.Timeout = TimeSpan.FromSeconds(5);
 });
+builder.Services.AddOpenTelemetry()
+    .ConfigureResource(r => r.AddService("worker"))
+    .WithMetrics(m => m
+        .AddMeter("Microsoft.AspNetCore.Hosting", "System.Net.Http", "System.Runtime")
+        .AddMeter(WorkerMetrics.MeterName)
+        .AddPrometheusExporter());
 
 var app = builder.Build();
+
+app.UseOpenTelemetryPrometheusScrapingEndpoint(ctx => ctx.Connection.LocalPort == 9090 && ctx.Request.Path == "/metrics");
 
 // Liveness = "is my own loop still turning", never "is orders-api up": a dependency outage must not restart us.
 app.MapHealthChecks("/health/live", new() { Predicate = c => c.Tags.Contains("live") });
@@ -23,6 +35,21 @@ app.MapHealthChecks("/health/ready", new() { Predicate = _ => false });
 app.Run();
 
 record PendingOrder(Guid Id, string Item);
+
+class WorkerMetrics
+{
+    public const string MeterName = "Sandbox.Worker";
+
+    public WorkerMetrics(IMeterFactory factory)
+    {
+        var meter = factory.Create(MeterName);
+        Polls = meter.CreateCounter<long>("sandbox.worker.polls", description: "Polling iterations by result (ok / http_error / failed)");
+        Processed = meter.CreateCounter<long>("sandbox.worker.orders.processed", description: "Orders the worker processed");
+    }
+
+    public Counter<long> Polls { get; }
+    public Counter<long> Processed { get; }
+}
 
 class Heartbeat
 {
@@ -43,7 +70,7 @@ class HeartbeatHealthCheck(Heartbeat heartbeat, IConfiguration config) : IHealth
     }
 }
 
-class OrderProcessor(IHttpClientFactory factory, Heartbeat heartbeat, IConfiguration config, ILogger<OrderProcessor> logger)
+class OrderProcessor(IHttpClientFactory factory, Heartbeat heartbeat, WorkerMetrics metrics, IConfiguration config, ILogger<OrderProcessor> logger)
     : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -60,6 +87,7 @@ class OrderProcessor(IHttpClientFactory factory, Heartbeat heartbeat, IConfigura
             }
             catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException && !stoppingToken.IsCancellationRequested)
             {
+                metrics.Polls.Add(1, new KeyValuePair<string, object?>("result", "failed"));
                 logger.LogWarning("orders-api call failed: {Message}", ex.Message);
             }
             await Task.Delay(interval, stoppingToken);
@@ -72,16 +100,20 @@ class OrderProcessor(IHttpClientFactory factory, Heartbeat heartbeat, IConfigura
         using var response = await client.GetAsync("/orders?status=pending", ct);
         if (!response.IsSuccessStatusCode)
         {
+            metrics.Polls.Add(1, new KeyValuePair<string, object?>("result", "http_error"));
             logger.LogWarning("orders-api returned {Status}", (int)response.StatusCode);
             return;
         }
+        metrics.Polls.Add(1, new KeyValuePair<string, object?>("result", "ok"));
 
         var servedBy = response.Headers.TryGetValues("X-Served-By", out var v) ? v.First() : "?";
         var pending = await response.Content.ReadFromJsonAsync<PendingOrder[]>(ct) ?? [];
-        logger.LogInformation("Polled {Pod}: {Count} pending", servedBy, pending.Length);
+        if (pending.Length > 0)
+            logger.LogInformation("Polled {Pod}: {Count} pending", servedBy, pending.Length);
         foreach (var order in pending)
         {
             using var result = await client.PostAsync($"/orders/{order.Id}/process", null, ct);
+            if (result.IsSuccessStatusCode) metrics.Processed.Add(1);
             logger.LogInformation("Order {Id} ({Item}) listed by {ListedBy}: process -> {Status}",
                 order.Id, order.Item, servedBy, (int)result.StatusCode);
         }

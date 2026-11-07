@@ -65,6 +65,24 @@
     "rollingUpdate": { "type": "object" },
     "shutdownDelaySeconds": { "type": "integer", "minimum": 0, "maximum": 25 },
     "spreadAcrossNodes": { "type": "boolean" },
+    "metrics": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "port": { "type": "integer" },
+        "path": { "type": "string" }
+      }
+    },
+    "slo": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "objective": { "type": "number", "exclusiveMinimum": 0, "exclusiveMaximum": 1 },
+        "latencyThresholdSeconds": { "type": "string", "pattern": "^[0-9.]+$" }
+      }
+    },
     "ingress": {
       "type": "object",
       "additionalProperties": false,

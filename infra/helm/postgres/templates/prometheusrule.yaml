@@ -1,0 +1,28 @@
+{{- if and .Values.metrics.enabled (.Capabilities.APIVersions.Has "monitoring.coreos.com/v1/PrometheusRule") }}
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: {{ .Release.Name }}
+  labels:
+    {{- include "postgres.labels" . | nindent 4 }}
+spec:
+  groups:
+    - name: {{ .Release.Name }}
+      rules:
+        # pg_up == 0: the exporter runs but can't reach postgres.
+        # absent(): no series at all - the whole pod (exporter included) is gone, e.g. scaled to 0 or Pending.
+        # Without the absent() half, a database that disappears completely would never alert.
+        - alert: PostgresDown
+          expr: |
+            (pg_up{namespace="{{ .Release.Namespace }}", app="{{ .Release.Name }}"} == 0)
+            or
+            (absent(pg_up{namespace="{{ .Release.Namespace }}", app="{{ .Release.Name }}"}) * 0)
+          for: 1m
+          labels:
+            severity: critical
+            namespace: {{ .Release.Namespace }}
+            app: {{ .Release.Name }}
+          annotations:
+            summary: "PostgreSQL {{ .Release.Name }} is down"
+            description: "No healthy PostgreSQL behind {{ .Release.Name }} for 1m: clients (orders-api) will answer 503."
+{{- end }}

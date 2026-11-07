@@ -3,7 +3,7 @@ replicas: 1
 
 image:
   repository: sandbox/worker
-  tag: "0.1.0"
+  tag: "0.3.0"   # 0.3.0: OpenTelemetry metrics on :9090, JSON logs
 
 service:
   enabled: false   # nobody calls the worker

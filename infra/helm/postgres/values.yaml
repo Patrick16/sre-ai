@@ -3,8 +3,17 @@ image:
   tag: "18.6-trixie"   # official image; Bitnami images moved to an unmaintained legacy repo in 2025
   pullPolicy: IfNotPresent
 
+# 1 = running, 0 = stopped (PVC kept). Change it with helm, never `kubectl scale` (that creates SSA drift).
+replicas: 1
+
 database: orders
 username: orders
+
+# postgres_exporter sidecar: pg_up, connections, database size, locks... scraped through a ServiceMonitor.
+metrics:
+  enabled: true
+  image: quay.io/prometheuscommunity/postgres-exporter:v0.20.1
+  port: 9187
 
 # Secret with the password (key `password`); created by scripts/deploy-apps.ps1, never stored in git.
 passwordSecret:

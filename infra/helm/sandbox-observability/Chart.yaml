@@ -1,0 +1,6 @@
+apiVersion: v2
+name: sandbox-observability
+description: Grafana dashboards for the sandbox, as code (ConfigMaps picked up by Grafana's sidecar).
+type: application
+version: 0.1.0
+appVersion: "0.1.0"

@@ -1,8 +1,16 @@
 using System.Net.Http.Json;
+using OpenTelemetry.Metrics;
+using OpenTelemetry.Resources;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddHealthChecks();
+builder.Services.AddOpenTelemetry()
+    .ConfigureResource(r => r.AddService("frontend"))
+    .WithMetrics(m => m
+        // System.Net.Http: outgoing calls to orders-api (latency/errors of the dependency, seen from the caller).
+        .AddMeter("Microsoft.AspNetCore.Hosting", "Microsoft.AspNetCore.Server.Kestrel", "System.Net.Http", "System.Runtime")
+        .AddPrometheusExporter());
 builder.Services.AddHttpClient("orders-api", (sp, client) =>
 {
     var config = sp.GetRequiredService<IConfiguration>();
@@ -13,6 +21,10 @@ builder.Services.AddHttpClient("orders-api", (sp, client) =>
 
 var app = builder.Build();
 var pod = Environment.MachineName;
+
+// Only on the metrics port, which the Service/Ingress for traffic doesn't route: metrics must not be public.
+// LocalPort (the socket actually used), not the Host header, which a client controls.
+app.UseOpenTelemetryPrometheusScrapingEndpoint(ctx => ctx.Connection.LocalPort == 9090 && ctx.Request.Path == "/metrics");
 
 app.MapHealthChecks("/health/live");
 app.MapHealthChecks("/health/ready");
