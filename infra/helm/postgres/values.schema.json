@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "image": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "repository": { "type": "string" },
+        "tag": { "type": "string", "not": { "const": "latest" } },
+        "pullPolicy": { "enum": ["IfNotPresent", "Always", "Never"] }
+      }
+    },
+    "database": { "type": "string", "minLength": 1 },
+    "username": { "type": "string", "minLength": 1 },
+    "passwordSecret": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "key"],
+      "properties": { "name": { "type": "string" }, "key": { "type": "string" } }
+    },
+    "storage": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": { "size": { "type": "string" }, "storageClassName": { "type": "string" } }
+    },
+    "pvcRetention": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "whenDeleted": { "enum": ["Retain", "Delete"] },
+        "whenScaled": { "enum": ["Retain", "Delete"] }
+      }
+    },
+    "resources": { "type": "object" }
+  }
+}

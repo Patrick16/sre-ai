@@ -57,9 +57,12 @@
 
 **Понять:** PV, PVC, StorageClass, StatefulSet, почему БД — не Deployment.
 
-- [ ] PostgreSQL как StatefulSet (через Helm-чарт) с PVC
-- [ ] `orders-api` пишет в БД
-- [ ] Эксперимент: удалить под БД — данные сохранились; удалить PVC — пропали
+- [x] PostgreSQL 18 как StatefulSet — свой чарт `infra/helm/postgres` (Bitnami больше не обновляется), PVC через `volumeClaimTemplates`, без root — см. [13](13-phase-4-storage.md)
+- [x] `orders-api` 0.2.x пишет в БД; общее состояние у всех реплик, worker обрабатывает все заказы
+- [x] Эксперимент: удалить под БД — данные сохранились (простой ~3.5 с, 503); `helm uninstall` — PVC сохранён (`Retain`); удалить PVC — данные пропали
+- [x] Найден и исправлен баг «health зелёный, сервис сломан» после подмены базы (0.2.1)
+- [ ] Упражнения из [13-phase-4-storage.md](13-phase-4-storage.md): падение ноды с PV, бэкап `pg_dump`, retry на мёртвых соединениях
+- [ ] (Опционально) CloudNativePG: 3 инстанса и автоматический failover
 
 ## Фаза 5. Observability
 

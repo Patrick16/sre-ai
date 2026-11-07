@@ -81,7 +81,6 @@ class OrderProcessor(IHttpClientFactory factory, Heartbeat heartbeat, IConfigura
         logger.LogInformation("Polled {Pod}: {Count} pending", servedBy, pending.Length);
         foreach (var order in pending)
         {
-            // Processing must hit the same pod that stores the order; with in-memory state and 3 replicas it often won't.
             using var result = await client.PostAsync($"/orders/{order.Id}/process", null, ct);
             logger.LogInformation("Order {Id} ({Item}) listed by {ListedBy}: process -> {Status}",
                 order.Id, order.Item, servedBy, (int)result.StatusCode);

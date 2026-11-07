@@ -1,0 +1,29 @@
+image:
+  repository: postgres
+  tag: "18.6-trixie"   # official image; Bitnami images moved to an unmaintained legacy repo in 2025
+  pullPolicy: IfNotPresent
+
+database: orders
+username: orders
+
+# Secret with the password (key `password`); created by scripts/deploy-apps.ps1, never stored in git.
+passwordSecret:
+  name: postgres-credentials
+  key: password
+
+storage:
+  size: 1Gi
+  storageClassName: standard   # kind's local-path provisioner: a directory on ONE node's disk
+
+# What happens to the PVC when the StatefulSet is deleted / scaled down. Retain = data survives `helm uninstall`.
+pvcRetention:
+  whenDeleted: Retain
+  whenScaled: Retain
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: "1"
+    memory: 512Mi

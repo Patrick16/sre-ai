@@ -3,7 +3,7 @@ replicas: 3
 
 image:
   repository: sandbox/orders-api
-  tag: "0.1.0"
+  tag: "0.2.1"   # 0.2.x: orders stored in PostgreSQL instead of pod memory; 0.2.1: recreate schema if the DB was replaced
 
 rollingUpdate:
   maxUnavailable: 0   # never drop below 3 ready pods during an update
@@ -20,6 +20,16 @@ configFiles:
           "Banner": "orders-api running in kind"
         }
       }
+
+configEnv:
+  Orders__Db__Host: "postgres"        # Service of the postgres release
+  Orders__Db__Database: "orders"
+  Orders__Db__Username: "orders"
+
+secretEnv:
+  - name: Orders__Db__Password
+    secretName: postgres-credentials  # created by scripts/deploy-apps.ps1, shared with the postgres release
+    key: password
 
 secretFiles:
   - secretName: sandbox-api-key   # created by scripts/deploy-apps.ps1, not stored in git

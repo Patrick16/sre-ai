@@ -1,0 +1,92 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ .Release.Name }}
+  labels:
+    {{- include "postgres.labels" . | nindent 4 }}
+spec:
+  # Single primary. Running 2 replicas of this would give two independent databases, not replication.
+  replicas: 1
+  serviceName: {{ .Release.Name }}-headless
+  selector:
+    matchLabels:
+      {{- include "postgres.selectorLabels" . | nindent 6 }}
+  persistentVolumeClaimRetentionPolicy:
+    whenDeleted: {{ .Values.pvcRetention.whenDeleted }}
+    whenScaled: {{ .Values.pvcRetention.whenScaled }}
+  template:
+    metadata:
+      labels:
+        {{- include "postgres.labels" . | nindent 8 }}
+    spec:
+      # Time for postgres to finish a checkpoint on shutdown before it is killed.
+      terminationGracePeriodSeconds: 60
+      securityContext:
+        # uid/gid of the "postgres" user in the official image; lets it run without root (Pod Security "restricted").
+        runAsNonRoot: true
+        runAsUser: 999
+        runAsGroup: 999
+        fsGroup: 999
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: postgres
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: postgres
+              containerPort: 5432
+          env:
+            - name: POSTGRES_USER
+              value: {{ .Values.username | quote }}
+            - name: POSTGRES_DB
+              value: {{ .Values.database | quote }}
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.passwordSecret.name }}
+                  key: {{ .Values.passwordSecret.key }}
+          volumeMounts:
+            # postgres:18 keeps data in /var/lib/postgresql/18/docker (PGDATA); the PVC is mounted one level up.
+            - name: data
+              mountPath: /var/lib/postgresql
+            - name: run
+              mountPath: /var/run/postgresql
+            - name: tmp
+              mountPath: /tmp
+          startupProbe:
+            {{- include "postgres.isready" . | nindent 12 }}
+            periodSeconds: 2
+            failureThreshold: 60   # first start runs initdb
+          livenessProbe:
+            {{- include "postgres.isready" . | nindent 12 }}
+            periodSeconds: 10
+            failureThreshold: 6
+          readinessProbe:
+            {{- include "postgres.isready" . | nindent 12 }}
+            periodSeconds: 5
+            failureThreshold: 2
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+      volumes:
+        - name: run
+          emptyDir: {}
+        - name: tmp
+          emptyDir: {}
+  # One PVC per pod, created on first start and re-attached to the same pod name forever: data-postgres-0.
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+        labels:
+          {{- include "postgres.selectorLabels" . | nindent 10 }}
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        storageClassName: {{ .Values.storage.storageClassName }}
+        resources:
+          requests:
+            storage: {{ .Values.storage.size }}

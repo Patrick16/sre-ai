@@ -1,0 +1,6 @@
+# helm upgrade --install postgres infra/helm/postgres -n sandbox -f infra/helm/releases/sandbox/postgres.yaml
+database: orders
+username: orders
+
+storage:
+  size: 1Gi
