@@ -3,6 +3,13 @@
 kind: Cluster
 apiVersion: kind.x-k8s.io/v1alpha4
 name: sre-ai
+# Let containerd in every node read per-registry mirror settings from /etc/containerd/certs.d/<registry>/hosts.toml.
+# scripts/registry-cache.ps1 writes those files to point docker.io / quay.io / registry.k8s.io at local
+# pull-through caches, so images are downloaded from the internet once and survive cluster re-creation.
+containerdConfigPatches:
+  - |-
+    [plugins."io.containerd.grpc.v1.cri".registry]
+      config_path = "/etc/containerd/certs.d"
 nodes:
   - role: control-plane
     # The Ingress Controller (Traefik, infra/helm/values/traefik.yaml) is pinned to nodes with this label.
@@ -13,12 +20,16 @@ nodes:
           kubeletExtraArgs:
             node-labels: "ingress-ready=true"
     # Host ports 80/443 -> this node, so https://sandbox.localhost reaches the Ingress Controller (Phase 2).
+    # listenAddress 127.0.0.1: only this machine can reach the sandbox (the default 0.0.0.0 exposes it,
+    # Grafana and Prometheus included, to the whole local network).
     extraPortMappings:
       - containerPort: 80
         hostPort: 80
+        listenAddress: "127.0.0.1"
         protocol: TCP
       - containerPort: 443
         hostPort: 443
+        listenAddress: "127.0.0.1"
         protocol: TCP
   - role: worker
   - role: worker

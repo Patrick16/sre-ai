@@ -75,7 +75,50 @@ winget install --id Kubernetes.kubectl -e
 
 [`infra/cluster/kind-config.yaml`](../infra/cluster/kind-config.yaml):
 - 1 control-plane + 2 worker — чтобы были видны распределение подов по нодам и «падение ноды»;
-- на control-plane label `ingress-ready=true` и проброс портов 80/443 с хоста — понадобится в Фазе 2 для Ingress.
+- на control-plane label `ingress-ready=true` и проброс портов 80/443 с хоста — понадобится в Фазе 2 для Ingress
+  (только на `127.0.0.1`, чтобы песочница не была видна из локальной сети);
+- `containerdConfigPatches` — включает в containerd нод каталог зеркал реестров (см. ниже).
+
+### Кеш образов (pull-through registry)
+
+**Проблема.** Каждая нода kind — отдельный контейнер со своим containerd и своим хранилищем образов. Образы
+Docker Desktop она не видит. Наши образы `build-images.ps1` кладёт в ноды сам (`kind load`), а образы сообщества
+(Prometheus, Grafana, Loki, Alloy, postgres…) каждая нода качает из интернета сама — и снова после каждого
+пересоздания кластера. Подключить хранилище Docker Desktop через volume нельзя: два демона containerd на одном
+хранилище портят его метаданные, а папка Windows не поддерживает overlayfs.
+
+**Решение** — [scripts/registry-cache.ps1](../scripts/registry-cache.ps1) (его вызывает `cluster-up.ps1`):
+
+```
+нода kind ──containerd──► /etc/containerd/certs.d/quay.io/hosts.toml: «сначала спроси кеш»
+                              │
+                              ▼
+        kind-cache-quay-io (registry:2.8.3, режим proxy) ──► quay.io   (только при первом запросе)
+                              │
+                         volume kind-cache-quay-io  ← переживает cluster-down
+```
+
+- Три кеша — по одному на реестр: `docker.io`, `quay.io`, `registry.k8s.io` (один экземпляр registry в режиме
+  proxy умеет только один upstream). Все в Docker-сети `kind`, ноды ходят к ним по имени контейнера.
+- Если кеш недоступен, containerd молча идёт в интернет напрямую (`server = ...` в `hosts.toml`) — кеш ускоряет,
+  но не является точкой отказа.
+- Так же устроены зеркала в компаниях (Harbor, Artifactory, ECR pull-through cache): быстрее, не упираешься в
+  лимиты Docker Hub, и кластер может стартовать, даже если внешний реестр лежит.
+
+Измерено: образ `grafana/alloy` первый раз — 337 с (скорость интернета), с другой ноды уже из кеша — **8.6 с**.
+
+**Почему `registry:2`, а не `registry:3`.** С `registry:3` (distribution v3) большие слои падали ровно через 30 с с
+`500 … context canceled`: в режиме proxy v3 отдаёт слой клиенту только после того, как скачал его целиком, и
+containerd не дожидается. Маленькие образы при этом проходили, и containerd молча уходил в интернет — то есть кеш
+«как бы работал», но ничего не ускорял. v2 отдаёт слой по мере скачивания. Мораль: проверять не «настроено», а
+«реально попадает в кеш» (`/v2/_catalog`, время скачивания).
+
+```powershell
+./scripts/registry-cache.ps1                  # поднять кеши и настроить ноды (идемпотентно)
+docker exec kind-cache-docker-io wget -qO- http://localhost:5000/v2/_catalog   # что закешировано
+./scripts/registry-cache.ps1 -Remove          # убрать контейнеры (данные остаются в volumes)
+./scripts/registry-cache.ps1 -Remove -Purge   # убрать и данные
+```
 
 ## .NET solution
 

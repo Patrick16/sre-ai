@@ -5,7 +5,8 @@
 
 | Скрипт (план) | Что делает | Фаза |
 |---|---|---|
-| `cluster-up.ps1` / `cluster-down.ps1` ✅ | Создать / удалить kind-кластер `sre-ai` | 0 |
+| `cluster-up.ps1` / `cluster-down.ps1` ✅ | Создать / удалить kind-кластер `sre-ai` (кеши образов `cluster-down` не трогает) | 0 |
+| `registry-cache.ps1` ✅ | Pull-through кеши образов для docker.io / quay.io / registry.k8s.io (вызывается из `cluster-up`; `-Remove`, `-Purge`) | 5 |
 | `build-images.ps1` ✅ | Собрать Docker-образы сервисов и загрузить в kind; тег берётся из `infra/helm/releases/sandbox/<service>.yaml` (`-Tag` переопределяет) | 1 |
 | `deploy-infra.ps1` ✅ | Платформа: namespace, Traefik, cert-manager, CA-issuers; экспорт корневого CA в `.local/` | 2–3 |
 | `deploy-apps.ps1` ✅ | Secrets (один раз) + Helm-релизы: postgres → orders-api → worker → frontend (`-Services`), `--rollback-on-failure` | 3–4 |

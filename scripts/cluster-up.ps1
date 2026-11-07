@@ -24,6 +24,9 @@ if ((kind get clusters) -contains $Name) {
     if ($LASTEXITCODE -ne 0) { throw 'kind create cluster failed.' }
 }
 
+# Pull-through image caches (survive cluster re-creation): see registry-cache.ps1.
+& (Join-Path $PSScriptRoot 'registry-cache.ps1') -Cluster $Name
+
 kubectl config use-context "kind-$Name" | Out-Null
 kubectl wait --for=condition=Ready nodes --all --timeout=180s
 kubectl get nodes -o wide
