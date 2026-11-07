@@ -29,6 +29,11 @@ pvcRetention:
   whenDeleted: Retain
   whenScaled: Retain
 
+# Who may connect to port 5432 (the namespace denies everything by default). Metrics: monitoring namespace.
+networkPolicy:
+  enabled: true
+  allowFromApps: [orders-api]
+
 resources:
   requests:
     cpu: 100m

@@ -19,6 +19,8 @@ spec:
       labels:
         {{- include "postgres.labels" . | nindent 8 }}
     spec:
+      serviceAccountName: {{ .Release.Name }}
+      automountServiceAccountToken: false
       # Time for postgres to finish a checkpoint on shutdown before it is killed.
       terminationGracePeriodSeconds: 60
       securityContext:

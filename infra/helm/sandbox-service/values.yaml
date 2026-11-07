@@ -69,6 +69,33 @@ shutdownDelaySeconds: 5
 # Prefer putting replicas on different nodes.
 spreadAcrossNodes: false
 
+# Own identity per service (instead of the namespace's shared "default"): the mesh uses it as the service's
+# mTLS identity. The pod gets no Kubernetes API token - none of these services talks to the API.
+serviceAccount:
+  create: true
+
+# The namespace denies all traffic by default (infra/manifests/platform/networkpolicy-baseline.yaml);
+# this declares what this service needs. Ports are container port NAMES of the destination pod ("http",
+# "postgres"): policies see the pod port after the Service's DNAT (8080), not the Service port (80).
+networkPolicy:
+  enabled: true
+  allowFromApps: []        # apps in the same namespace that may call our "http" port, e.g. [frontend, worker]
+  allowFromNamespaces: []  # whole namespaces that may call it, e.g. [traefik]
+  allowToApps: []          # whom we call: [{ app: orders-api, port: http }]
+
+# Service-mesh traffic policy (Gateway API HTTPRoutes attached to this Service; Linkerd applies them in the
+# CALLER's proxy). Once a Service has any HTTPRoute, only routed requests are accepted, so a catch-all route
+# is always rendered next to the GET one.
+mesh:
+  routes:
+    enabled: false
+    requestTimeout: 3s       # whole request, including retries
+    getRetries:              # only GET: retrying a POST could create a duplicate order
+      enabled: true
+      limit: 3
+      perTryTimeout: 1s
+      retryOn: 5xx           # not "on:" - YAML 1.1 reads the bare key `on` as the boolean true
+
 # Prometheus metrics on a separate port: not part of the Service port used by Ingress, so never public.
 # A PodMonitor tells the Prometheus Operator to scrape it (only rendered if the CRD exists).
 metrics:

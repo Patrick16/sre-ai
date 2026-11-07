@@ -20,6 +20,11 @@ secretEnv:
     secretName: sandbox-api-key
     key: api-key
 
+networkPolicy:
+  allowFromNamespaces: [traefik]        # users arrive through the Ingress Controller
+  allowToApps:
+    - app: orders-api
+
 ingress:
   enabled: true
   host: sandbox.localhost

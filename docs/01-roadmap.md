@@ -82,11 +82,13 @@
 
 **Понять:** zero-trust внутри кластера, sidecar-прокси, что именно шифрует mTLS.
 
-- [ ] NetworkPolicy: по умолчанию deny, разрешить только нужные связи
-- [ ] Установить Linkerd, включить inject для namespace sandbox
-- [ ] Проверить, что трафик идёт по mTLS (`linkerd viz edges`)
-- [ ] Retries/timeouts на уровне mesh, метрики mesh в Grafana
-- [ ] (Опционально) сравнить с Istio — понять, чем отличаются
+- [x] NetworkPolicy: default-deny + DNS на namespace, разрешения объявляет каждый чарт; блокировка проверена — см. [15](15-phase-6-network-security.md)
+- [x] Свой ServiceAccount на сервис (identity для mTLS), без токена API
+- [x] Linkerd edge-26.11.1: identity через cert-manager, linkerd-cni (совместимость с Pod Security `restricted`), native sidecar, inject для `sandbox` и `sre-agent`
+- [x] mTLS проверен по метрикам прокси (`tls=true`, `client_id` = ServiceAccount); балансировка по запросам исправила эффект Фазы 1
+- [x] Retries (только GET) и timeouts через Gateway API HTTPRoute; эффект измерен; метрики прокси в нашем Prometheus, Linkerd Viz поверх него
+- [ ] Упражнения из [15-phase-6-network-security.md](15-phase-6-network-security.md): mesh для Traefik, `AuthorizationPolicy` по identity
+- [ ] (Опционально) сравнить с Istio ambient — понять, чем отличаются
 
 ## Фаза 7. Агент MVP (read-only)
 

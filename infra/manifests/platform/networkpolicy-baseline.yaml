@@ -1,0 +1,118 @@
+# Zero-trust baseline for the namespaces apps run in: everything is denied (in AND out) unless a policy
+# allows it. Each app's Helm chart then declares exactly who may call it and whom it calls.
+# Policies only add permissions: a connection is allowed if ANY policy selecting the pod allows it.
+# Applied with kubectl by scripts/deploy-infra.ps1.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-all
+  namespace: sandbox
+spec:
+  podSelector: {}            # every pod in the namespace
+  policyTypes: [Ingress, Egress]
+---
+# Without DNS nothing can resolve "orders-api" or "postgres" - the most common way a default-deny breaks a cluster.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-dns
+  namespace: sandbox
+spec:
+  podSelector: {}
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - { protocol: UDP, port: 53 }
+        - { protocol: TCP, port: 53 }
+---
+# Service mesh plumbing (Phase 6): every meshed pod's proxy talks to Linkerd's control plane (identity
+# certificates, service discovery, policy) and is scraped/tapped on its own admin ports.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-linkerd
+  namespace: sandbox
+spec:
+  podSelector: {}
+  policyTypes: [Ingress, Egress]
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: linkerd
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+      ports:
+        - port: 4191   # linkerd-admin: proxy metrics
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: linkerd-viz
+      ports:
+        - port: 4190   # tap
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-all
+  namespace: sre-agent
+spec:
+  podSelector: {}
+  policyTypes: [Ingress, Egress]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-dns
+  namespace: sre-agent
+spec:
+  podSelector: {}
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - { protocol: UDP, port: 53 }
+        - { protocol: TCP, port: 53 }
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-linkerd
+  namespace: sre-agent
+spec:
+  podSelector: {}
+  policyTypes: [Ingress, Egress]
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: linkerd
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+      ports:
+        - port: 4191
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: linkerd-viz
+      ports:
+        - port: 4190

@@ -1,0 +1,70 @@
+# Linkerd's mTLS identity, managed by cert-manager instead of by hand.
+#
+#   linkerd-trust-anchor   (root CA, 10y)  - every proxy trusts certificates that chain up to it
+#        └── linkerd-identity-issuer (intermediate CA, 48h, renewed by cert-manager after 23h)
+#                └── per-pod certificates (24h) issued by linkerd-identity to each proxy, rotated automatically
+#
+# A separate root from sandbox-root-ca (the Ingress CA): different trust domains shouldn't share a root.
+# In production the trust anchor's private key would NOT live in the cluster (offline CA / Vault / KMS) and
+# trust-manager would distribute only its public certificate.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: linkerd
+  labels:
+    linkerd.io/is-control-plane: "true"
+    config.linkerd.io/admission-webhooks: disabled
+    linkerd.io/control-plane-ns: linkerd
+---
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: linkerd-selfsigned
+  namespace: linkerd
+spec:
+  selfSigned: {}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: linkerd-trust-anchor
+  namespace: linkerd
+spec:
+  isCA: true
+  commonName: root.linkerd.cluster.local
+  secretName: linkerd-trust-anchor
+  duration: 87600h
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+  issuerRef:
+    kind: Issuer
+    name: linkerd-selfsigned
+---
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: linkerd-trust-anchor
+  namespace: linkerd
+spec:
+  ca:
+    secretName: linkerd-trust-anchor
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: linkerd-identity-issuer
+  namespace: linkerd
+spec:
+  isCA: true
+  commonName: identity.linkerd.cluster.local
+  secretName: linkerd-identity-issuer   # read by the linkerd-identity controller (identity.externalCA=true)
+  duration: 48h
+  renewBefore: 25h
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+  usages: [cert sign, crl sign, server auth, client auth]
+  issuerRef:
+    kind: Issuer
+    name: linkerd-trust-anchor

@@ -5,7 +5,9 @@ kind: Pod
 metadata:
   name: {{ include "sandbox-service.name" . }}-test-health
   labels:
-    {{- include "sandbox-service.labels" . | nindent 4 }}
+    # Its own name, not the app's: otherwise the app's NetworkPolicy would apply to it.
+    app.kubernetes.io/name: {{ include "sandbox-service.name" . }}-test
+    app.kubernetes.io/part-of: sandbox
   annotations:
     helm.sh/hook: test
     helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded

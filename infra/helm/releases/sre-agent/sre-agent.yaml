@@ -5,3 +5,8 @@ replicas: 1
 image:
   repository: sre-agent/host
   tag: "0.1.0"
+
+networkPolicy:
+  allowFromNamespaces: [monitoring]     # Alertmanager's webhook
+  # Phase 7 adds egress: Kubernetes API, Prometheus, Loki, the LLM endpoint.
+  allowToApps: []

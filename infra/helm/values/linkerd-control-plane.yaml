@@ -1,0 +1,15 @@
+# Linkerd control plane: identity (issues each proxy's mTLS certificate), destination (service discovery,
+# per-request load balancing), policy, and the proxy-injector webhook.
+# Chart: linkerd-edge/linkerd-control-plane 2026.11.1. identityTrustAnchorsPEM is passed by deploy-infra.ps1
+# from the cert-manager secret linkerd/linkerd-trust-anchor.
+cniEnabled: true          # redirect via linkerd-cni instead of a privileged init container
+
+identity:
+  externalCA: true        # don't generate certificates: use the issuer cert-manager keeps in linkerd-identity-issuer
+  issuer:
+    scheme: kubernetes.io/tls
+
+proxy:
+  # Proxy as a native sidecar (init container with restartPolicy: Always): it starts before the app and stops
+  # after it, so the app's preStop delay (Phase 3) still has a working proxy in front of it.
+  nativeSidecar: true

@@ -1,0 +1,6 @@
+# Linkerd CNI plugin: a DaemonSet that adds Linkerd's iptables redirect (app traffic -> proxy) while each pod's
+# network is being set up. Without it every meshed pod needs an init container with NET_ADMIN/NET_RAW, which
+# Pod Security "restricted" (our sandbox namespace) rejects.
+# Chart: linkerd-edge/linkerd2-cni 2026.11.1. kind's CNI config lives in the defaults: /etc/cni/net.d, /opt/cni/bin.
+tolerations:
+  - operator: Exists   # every node, control-plane included

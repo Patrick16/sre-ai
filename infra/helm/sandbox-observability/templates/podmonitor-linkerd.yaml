@@ -1,0 +1,65 @@
+{{- if .Capabilities.APIVersions.Has "monitoring.coreos.com/v1/PodMonitor" }}
+# Scrapes every Linkerd proxy (port linkerd-admin, 4191) in every namespace: request/response/TCP metrics
+# per edge, with mTLS status (tls="true"). Linkerd Viz reads these from our Prometheus.
+# Relabelling follows Linkerd's "bring your own Prometheus" config: pod labels like
+# linkerd.io/proxy-deployment become plain labels (deployment="orders-api") that Viz queries by.
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: linkerd-proxy
+  labels:
+    app.kubernetes.io/part-of: sandbox
+spec:
+  namespaceSelector:
+    any: true
+  selector: {}
+  podMetricsEndpoints:
+    - port: linkerd-admin
+      path: /metrics
+      interval: 15s
+      relabelings:
+        - sourceLabels: [__meta_kubernetes_pod_container_name, __meta_kubernetes_pod_label_linkerd_io_control_plane_ns]
+          action: keep
+          regex: ^linkerd-proxy;linkerd$
+        - sourceLabels: [__meta_kubernetes_namespace]
+          targetLabel: namespace
+        - sourceLabels: [__meta_kubernetes_pod_name]
+          targetLabel: pod
+        - sourceLabels: [__meta_kubernetes_pod_label_linkerd_io_proxy_job]
+          targetLabel: k8s_job
+        - action: labeldrop
+          regex: __meta_kubernetes_pod_label_linkerd_io_proxy_job
+        - action: labelmap
+          regex: __meta_kubernetes_pod_label_linkerd_io_proxy_(.+)
+        - action: labeldrop
+          regex: __meta_kubernetes_pod_label_linkerd_io_proxy_(.+)
+        - action: labelmap
+          regex: __meta_kubernetes_pod_label_linkerd_io_(.+)
+        - action: labelmap
+          regex: __meta_kubernetes_pod_label_(.+)
+          replacement: __tmp_pod_label_$1
+        - action: labelmap
+          regex: __tmp_pod_label_linkerd_io_(.+)
+          replacement: __tmp_pod_label_$1
+        - action: labeldrop
+          regex: __tmp_pod_label_linkerd_io_(.+)
+        - action: labelmap
+          regex: __tmp_pod_label_(.+)
+---
+# The control plane's own metrics (identity, destination, policy, proxy-injector).
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: linkerd-control-plane
+  labels:
+    app.kubernetes.io/part-of: sandbox
+spec:
+  namespaceSelector:
+    matchNames: [linkerd]
+  selector: {}
+  podMetricsEndpoints:
+    - port: admin-http
+      relabelings:
+        - sourceLabels: [__meta_kubernetes_pod_label_linkerd_io_control_plane_component]
+          targetLabel: component
+{{- end }}

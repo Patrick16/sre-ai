@@ -126,6 +126,8 @@ Kubernetes — это система, которой вы описываете *
 - **Linkerd vs Istio**: Linkerd проще и легче — для обучения лучше начать с него. Istio мощнее
   (и сложнее); понять разницу — задача на фазу 6.
 - **Цена**: дополнительная задержка и ресурсы на каждый под, ещё один компонент, который может сломаться.
+- **В проекте**: Linkerd edge, mTLS для `sandbox` и `sre-agent`; практика и подводные камни (порт 4143, trust roots,
+  Pod Security) — [15-phase-6-network-security.md](15-phase-6-network-security.md).
 
 ## CRD и операторы
 - **CRD** (Custom Resource Definition) — способ добавить в k8s свои типы объектов

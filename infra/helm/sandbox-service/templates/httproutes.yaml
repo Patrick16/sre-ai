@@ -1,0 +1,48 @@
+{{- if and .Values.service.enabled .Values.mesh.routes.enabled (.Capabilities.APIVersions.Has "gateway.networking.k8s.io/v1/HTTPRoute") }}
+{{- $name := include "sandbox-service.name" . -}}
+{{- $r := .Values.mesh.routes -}}
+# GAMMA: an HTTPRoute whose parent is a Service (not a Gateway) configures east-west (service-to-service)
+# traffic. Linkerd's annotations add what the Gateway API spec doesn't standardise yet: retries.
+{{- if $r.getRetries.enabled }}
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: {{ $name }}-reads
+  labels:
+    {{- include "sandbox-service.labels" . | nindent 4 }}
+  annotations:
+    retry.linkerd.io/http: {{ $r.getRetries.retryOn | quote }}
+    retry.linkerd.io/limit: {{ $r.getRetries.limit | quote }}
+    retry.linkerd.io/timeout: {{ $r.getRetries.perTryTimeout | quote }}
+    timeout.linkerd.io/request: {{ $r.requestTimeout | quote }}
+spec:
+  parentRefs:
+    - group: core
+      kind: Service
+      name: {{ $name }}
+      port: {{ .Values.service.port }}
+  rules:
+    - matches:
+        - method: GET   # more specific than the catch-all below, so GETs land here
+---
+{{- end }}
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: {{ $name }}-all
+  labels:
+    {{- include "sandbox-service.labels" . | nindent 4 }}
+  annotations:
+    timeout.linkerd.io/request: {{ $r.requestTimeout | quote }}
+spec:
+  parentRefs:
+    - group: core
+      kind: Service
+      name: {{ $name }}
+      port: {{ .Values.service.port }}
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
+{{- end }}

@@ -65,6 +65,57 @@
     "rollingUpdate": { "type": "object" },
     "shutdownDelaySeconds": { "type": "integer", "minimum": 0, "maximum": 25 },
     "spreadAcrossNodes": { "type": "boolean" },
+    "serviceAccount": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": { "create": { "type": "boolean" } }
+    },
+    "networkPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "allowFromApps": { "type": "array", "items": { "type": "string" } },
+        "allowFromNamespaces": { "type": "array", "items": { "type": "string" } },
+        "allowToApps": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["app"],
+            "properties": {
+              "app": { "type": "string" },
+              "port": { "type": ["string", "integer"] },
+              "namespace": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+    "mesh": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "routes": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "requestTimeout": { "type": "string", "pattern": "^[0-9]+(ms|s|m)$" },
+            "getRetries": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "enabled": { "type": "boolean" },
+                "limit": { "type": "integer", "minimum": 1, "maximum": 10 },
+                "perTryTimeout": { "type": "string", "pattern": "^[0-9]+(ms|s|m)$" },
+                "retryOn": { "type": "string" }
+              }
+            }
+          }
+        }
+      }
+    },
     "metrics": {
       "type": "object",
       "additionalProperties": false,

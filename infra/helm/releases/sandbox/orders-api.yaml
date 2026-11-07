@@ -46,6 +46,19 @@ probes:
   startup:
     enabled: true
 
+# Calls INTO orders-api from meshed clients (frontend, worker): GETs are retried on 5xx (e.g. the 503s
+# while PostgreSQL restarts), writes are never retried. Traefik is not meshed, so /api/* gets neither.
+mesh:
+  routes:
+    enabled: true
+
+networkPolicy:
+  allowFromApps: [frontend, worker]
+  allowFromNamespaces: [traefik]        # https://sandbox.localhost/api
+  allowToApps:
+    - app: postgres
+      port: postgres
+
 ingress:
   enabled: true
   host: sandbox.localhost

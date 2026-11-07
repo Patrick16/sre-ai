@@ -17,6 +17,10 @@ secretEnv:
     secretName: sandbox-api-key
     key: api-key
 
+networkPolicy:
+  allowToApps:
+    - app: orders-api                   # nobody calls the worker; it only calls orders-api
+
 probes:
   readiness:
     enabled: false   # receives no traffic; liveness checks its own processing loop

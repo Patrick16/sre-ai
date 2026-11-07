@@ -1,0 +1,7 @@
+# Linkerd Viz: dashboard, tap and `linkerd viz stat/edges`, backed by OUR Prometheus (kube-prometheus-stack)
+# instead of a second Prometheus. The proxy scrape config is a PodMonitor in infra/helm/sandbox-observability.
+# Chart: linkerd-edge/linkerd-viz 2026.11.1.
+#   kubectl port-forward -n linkerd-viz svc/web 8084:8084  ->  http://localhost:8084
+prometheusUrl: http://kube-prometheus-stack-prometheus.monitoring.svc.cluster.local:9090
+prometheus:
+  enabled: false

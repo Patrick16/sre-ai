@@ -1,0 +1,7 @@
+# Linkerd's CRDs (Server, AuthorizationPolicy, ...). Chart: linkerd-edge/linkerd-crds 2026.11.1 (edge-26.11.1).
+# Linkerd's open-source project publishes only "edge" releases since 2024; stable builds come from vendors.
+#
+# Gateway API CRDs (HTTPRoute/GRPCRoute, used for retries and timeouts) are installed by Linkerd here, pinned to
+# a version it supports. Trade-off: if another component (e.g. Traefik as a Gateway) wants a newer Gateway API,
+# the CRDs should instead be installed once, separately, from kubernetes-sigs/gateway-api.
+installGatewayAPI: true

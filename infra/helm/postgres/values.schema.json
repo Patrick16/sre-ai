@@ -22,6 +22,14 @@
         "port": { "type": "integer" }
       }
     },
+    "networkPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "allowFromApps": { "type": "array", "items": { "type": "string" } }
+      }
+    },
     "database": { "type": "string", "minLength": 1 },
     "username": { "type": "string", "minLength": 1 },
     "passwordSecret": {

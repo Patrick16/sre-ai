@@ -38,7 +38,7 @@
 | `sandbox` | frontend, orders-api, worker, postgres | Подопытная система; цель для хаоса и агента |
 | `traefik` | Ingress Controller | Инфраструктура входящего трафика |
 | `cert-manager` | Выпуск сертификатов | Инфраструктура |
-| `linkerd`, `linkerd-viz` | Control plane mesh | Инфраструктура |
+| `linkerd`, `linkerd-cni`, `linkerd-viz` | Control plane mesh, CNI-плагин, дашборд | Инфраструктура |
 | `monitoring` | Prometheus, Grafana, Alertmanager, Loki | Наблюдаемость не должна падать вместе с приложением |
 | `chaos` | Chaos Mesh | Инструмент, отдельно от цели |
 | `sre-agent` | Агент | Свой ServiceAccount и RBAC, изоляция прав |

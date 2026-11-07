@@ -34,6 +34,47 @@ data:
       }
     }
 ---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ .Release.Name }}
+  labels:
+    app.kubernetes.io/name: {{ .Release.Name }}
+    app.kubernetes.io/part-of: sandbox
+automountServiceAccountToken: false
+---
+# Load goes through the Ingress Controller like real users do; the generator may reach nothing else.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ .Release.Name }}
+  labels:
+    app.kubernetes.io/name: {{ .Release.Name }}
+    app.kubernetes.io/part-of: sandbox
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: {{ .Release.Name }}
+  policyTypes: [Ingress, Egress]
+  ingress: []
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - { protocol: UDP, port: 53 }
+        - { protocol: TCP, port: 53 }
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: traefik
+      ports:
+        - port: websecure   # Traefik's container port 8443 behind its Service port 443
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -54,6 +95,8 @@ spec:
       annotations:
         checksum/script: {{ .Values | toJson | sha256sum }}
     spec:
+      serviceAccountName: {{ .Release.Name }}
+      automountServiceAccountToken: false
       securityContext:
         runAsNonRoot: true
         runAsUser: 12345   # k6 image user
