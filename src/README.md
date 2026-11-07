@@ -9,7 +9,7 @@
 | `SreAgent.Tools` | classlib | Реализации tools: KubernetesClient, Prometheus, Loki, Alertmanager, исполнители действий | 7–8 |
 | `SreAgent.LlmClients` | classlib | OpenAI-совместимый клиент (облако / LM Studio), tool calling, ретраи | 7 |
 | `SreAgent.Host` | ASP.NET Core | Webhook для Alertmanager, BackgroundService-таймер, DI, конфиг | 7 |
-| `Sandbox.Services/*` | ASP.NET Core Minimal API | Подопытные `frontend`, `orders-api`, `worker` с режимами неисправности | 1 |
+| `Sandbox.Services/*` ✅ | ASP.NET Core Minimal API | Подопытные `frontend`, `orders-api`, `worker` (общий `Dockerfile`); режимы неисправности добавятся в Фазе 9 | 1 |
 
 Тесты — в `tests/` (xUnit): `tests/SreAgent.Core.Tests` уже есть. Важнее всего покрыть
 тестами guardrails и сам loop (на фейковой LLM).

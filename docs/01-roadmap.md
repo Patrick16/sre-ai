@@ -25,12 +25,12 @@
 
 **Понять:** Pod, ReplicaSet, Deployment, Service, Namespace, ConfigMap, Secret, probes, requests/limits.
 
-- [ ] 3 sandbox-сервиса на .NET: `frontend` → `orders-api` → `worker` (минимальный HTTP)
-- [ ] Dockerfile для каждого, загрузка образов в kind (`kind load docker-image`)
-- [ ] Сырые манифесты в `infra/manifests/phase-1/`: Namespace, Deployment, Service
-- [ ] ConfigMap с настройками, Secret с «паролем» — подключить как env и как файл
-- [ ] liveness/readiness/startup probes, resources requests/limits
-- [ ] Эксперимент: удалить под руками и посмотреть, как Deployment его пересоздаёт
+- [x] 3 sandbox-сервиса на .NET: `frontend` → `orders-api` ← `worker` (минимальный HTTP) — см. [10](10-phase-1-kubernetes-basics.md)
+- [x] Общий multi-stage Dockerfile, загрузка образов в kind (`scripts/build-images.ps1`)
+- [x] Сырые манифесты в `infra/manifests/phase-1/`: Namespace (Pod Security `restricted`), Deployment, Service
+- [x] ConfigMap с настройками, Secret с API-ключом — подключены и как env, и как файл
+- [x] liveness/readiness/startup probes, resources requests/limits, securityContext
+- [ ] Пройти упражнения из [10-phase-1-kubernetes-basics.md](10-phase-1-kubernetes-basics.md) (удаление пода, scale, OOMKilled, rollout undo…)
 
 ## Фаза 2. Трафик снаружи: Ingress и TLS
 

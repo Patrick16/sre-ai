@@ -1,4 +1,9 @@
 <Solution>
+  <Folder Name="/sandbox/">
+    <Project Path="src/Sandbox.Services/Frontend/Sandbox.Frontend.csproj" />
+    <Project Path="src/Sandbox.Services/OrdersApi/Sandbox.OrdersApi.csproj" />
+    <Project Path="src/Sandbox.Services/Worker/Sandbox.Worker.csproj" />
+  </Folder>
   <Folder Name="/src/">
     <Project Path="src/SreAgent.Core/SreAgent.Core.csproj" />
     <Project Path="src/SreAgent.Host/SreAgent.Host.csproj" />

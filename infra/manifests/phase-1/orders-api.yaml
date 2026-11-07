@@ -1,0 +1,131 @@
+# Mounted as a FILE (see volumes below): edits reach running pods in ~1 min without a restart.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: orders-api-config
+  namespace: sandbox
+  labels:
+    app.kubernetes.io/name: orders-api
+    app.kubernetes.io/part-of: sandbox
+data:
+  appsettings.k8s.json: |
+    {
+      "Orders": {
+        "Banner": "orders-api running in kind"
+      }
+    }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: orders-api
+  namespace: sandbox
+  labels:
+    app.kubernetes.io/name: orders-api
+    app.kubernetes.io/part-of: sandbox
+spec:
+  replicas: 3
+  # Immutable after creation: must match the pod template labels, and must not include labels that change (like version).
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: orders-api
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0   # never drop below 3 ready pods during an update
+      maxSurge: 1         # bring up one new pod at a time
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: orders-api
+        app.kubernetes.io/part-of: sandbox
+        app.kubernetes.io/version: "0.1.0"
+    spec:
+      # Spread replicas across nodes so losing one node doesn't take out every replica.
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: orders-api
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: orders-api
+          image: sandbox/orders-api:0.1.0
+          # Not ":latest" — with latest k8s defaults to Always and would try (and fail) to pull from a registry.
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8080
+          env:
+            - name: APP_VERSION
+              value: "0.1.0"
+            # ConfigMap volumes are updated via symlink swaps that inotify misses; polling sees them.
+            - name: DOTNET_USE_POLLING_FILE_WATCHER
+              value: "true"
+          volumeMounts:
+            - name: config
+              mountPath: /app/config
+              readOnly: true
+            - name: api-key
+              mountPath: /etc/orders-api/secret
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+          startupProbe:
+            httpGet: { path: /health/live, port: http }
+            periodSeconds: 2
+            failureThreshold: 30   # up to 60s to start before liveness takes over
+          livenessProbe:
+            httpGet: { path: /health/live, port: http }
+            periodSeconds: 10
+            failureThreshold: 3
+          readinessProbe:
+            httpGet: { path: /health/ready, port: http }
+            periodSeconds: 5
+            failureThreshold: 2
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi   # exceeding this => OOMKilled (try POST /debug/allocate?mb=300)
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+      volumes:
+        - name: config
+          configMap:
+            name: orders-api-config
+        - name: api-key
+          secret:
+            secretName: sandbox-api-key   # created by scripts/deploy-phase1.ps1, not stored in git
+            items:
+              - key: api-key
+                path: api-key
+        - name: tmp
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: orders-api
+  namespace: sandbox
+  labels:
+    app.kubernetes.io/name: orders-api
+    app.kubernetes.io/part-of: sandbox
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: orders-api
+  ports:
+    - name: http
+      port: 80          # what clients use: http://orders-api
+      targetPort: http  # the container port name above

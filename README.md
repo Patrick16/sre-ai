@@ -40,12 +40,15 @@ Retrieve → Analyze → Lead → Feedback, см. [docs/05-agent-architecture.md
 
 ## Статус
 
-**Фаза 0 пройдена**: инструменты, .NET solution, локальный kind-кластер
-([docs/09-dev-environment.md](docs/09-dev-environment.md)). Дальше — Фаза 1 (базовый Kubernetes).
+**Пройдены Фазы 0–1**: инструменты, .NET solution, kind-кластер
+([docs/09](docs/09-dev-environment.md)), три sandbox-сервиса на сырых манифестах
+([docs/10](docs/10-phase-1-kubernetes-basics.md)). Дальше — Фаза 2 (Ingress и TLS).
 Код, манифесты и чарты появляются по мере прохождения фаз из [роадмапа](docs/01-roadmap.md).
 
 ```powershell
-./scripts/cluster-up.ps1     # поднять кластер
-dotnet build SreAi.slnx      # собрать решение
+./scripts/cluster-up.ps1        # поднять кластер
+./scripts/build-images.ps1      # собрать образы и загрузить в kind
+./scripts/deploy-phase1.ps1     # развернуть sandbox
+kubectl port-forward -n sandbox svc/frontend 8080:80
 ``` Актуальный статус по
 фазам отмечается чек-боксами прямо в роадмапе.
