@@ -6,8 +6,10 @@
 | Папка | Что будет | Фаза |
 |---|---|---|
 | `cluster/` ✅ | Конфиг kind (`kind-config.yaml`: 1 control-plane + 2 worker, проброс портов 80/443 для Ingress) | 0 |
-| `manifests/` | «Сырые» YAML, разложенные по фазам (`phase-1/` ✅, `phase-2/` ✅) — для понимания механики до Helm | 1–2 |
-| `helm/` | Свой чарт `sandbox-service`, чарт агента (Фаза 3+) и `values/` для инфраструктурных чартов сообщества (traefik ✅, cert-manager ✅, kube-prometheus-stack, loki, linkerd, chaos-mesh, postgresql) | 2+ |
+| `manifests/platform/` ✅ | То, что принадлежит платформе, а не приложению: namespace с Pod Security, CA-issuers. Сырые манифесты приложений Фаз 1–2 заменены чартом (остались в истории git: `8a47ee6`, `95f2f88`) | 1–3 |
+| `helm/sandbox-service/` ✅ | Наш чарт для всех sandbox-сервисов | 3 |
+| `helm/releases/sandbox/` ✅ | values отдельного релиза на каждый сервис | 3 |
+| `helm/values/` ✅ | values для чартов сообщества (traefik ✅, cert-manager ✅, позже kube-prometheus-stack, loki, linkerd, chaos-mesh, postgresql) | 2+ |
 | `chaos/` | Манифесты экспериментов Chaos Mesh (всегда ограничены namespace `sandbox`) | 9 |
 
 Правила:

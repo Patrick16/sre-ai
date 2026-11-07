@@ -40,17 +40,17 @@ Retrieve → Analyze → Lead → Feedback, см. [docs/05-agent-architecture.md
 
 ## Статус
 
-**Пройдены Фазы 0–2**: инструменты, .NET solution, kind-кластер
-([docs/09](docs/09-dev-environment.md)), три sandbox-сервиса на сырых манифестах
-([docs/10](docs/10-phase-1-kubernetes-basics.md)), Traefik + cert-manager и HTTPS на
-`https://sandbox.localhost` ([docs/11](docs/11-phase-2-ingress-tls.md)). Дальше — Фаза 3 (Helm).
+**Пройдены Фазы 0–3**: инструменты, .NET solution, kind-кластер
+([docs/09](docs/09-dev-environment.md)), три sandbox-сервиса ([docs/10](docs/10-phase-1-kubernetes-basics.md)),
+Traefik + cert-manager и HTTPS на `https://sandbox.localhost` ([docs/11](docs/11-phase-2-ingress-tls.md)),
+свой Helm-чарт и релиз на каждый сервис ([docs/12](docs/12-phase-3-helm.md)). Дальше — Фаза 4 (хранение данных).
 Код, манифесты и чарты появляются по мере прохождения фаз из [роадмапа](docs/01-roadmap.md).
 
 ```powershell
 ./scripts/cluster-up.ps1        # поднять кластер
 ./scripts/build-images.ps1      # собрать образы и загрузить в kind
-./scripts/deploy-phase1.ps1     # развернуть sandbox
-./scripts/deploy-phase2.ps1     # Traefik, cert-manager, HTTPS
+./scripts/deploy-infra.ps1      # платформа: Traefik, cert-manager, CA
+./scripts/deploy-apps.ps1       # Helm-релизы сервисов
 curl.exe --ssl-no-revoke --cacert .local/sandbox-root-ca.crt https://sandbox.localhost/
 ``` Актуальный статус по
 фазам отмечается чек-боксами прямо в роадмапе.

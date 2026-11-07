@@ -1,0 +1,30 @@
+# helm upgrade --install worker infra/helm/sandbox-service -n sandbox -f infra/helm/releases/sandbox/worker.yaml
+replicas: 1
+
+image:
+  repository: sandbox/worker
+  tag: "0.1.0"
+
+service:
+  enabled: false   # nobody calls the worker
+
+configEnv:
+  Worker__IntervalSeconds: "5"
+  OrdersApi__BaseUrl: "http://orders-api"
+
+secretEnv:
+  - name: OrdersApi__ApiKey
+    secretName: sandbox-api-key
+    key: api-key
+
+probes:
+  readiness:
+    enabled: false   # receives no traffic; liveness checks its own processing loop
+
+resources:
+  requests:
+    cpu: 20m
+    memory: 64Mi
+  limits:
+    cpu: 250m
+    memory: 192Mi

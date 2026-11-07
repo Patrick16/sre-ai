@@ -1,0 +1,27 @@
+{{- if .Values.service.enabled }}
+# `helm test <release> -n sandbox` runs this pod: it checks the service answers through its Service DNS name.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: {{ include "sandbox-service.name" . }}-test-health
+  labels:
+    {{- include "sandbox-service.labels" . | nindent 4 }}
+  annotations:
+    helm.sh/hook: test
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+spec:
+  restartPolicy: Never
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 100
+    seccompProfile:
+      type: RuntimeDefault
+  containers:
+    - name: curl
+      image: curlimages/curl:8.11.1
+      args: ["-sf", "--max-time", "5", "http://{{ include "sandbox-service.name" . }}:{{ .Values.service.port }}{{ .Values.probes.liveness.path }}"]
+      securityContext:
+        allowPrivilegeEscalation: false
+        capabilities:
+          drop: ["ALL"]
+{{- end }}

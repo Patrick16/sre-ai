@@ -1,0 +1,39 @@
+# helm upgrade --install orders-api infra/helm/sandbox-service -n sandbox -f infra/helm/releases/sandbox/orders-api.yaml
+replicas: 3
+
+image:
+  repository: sandbox/orders-api
+  tag: "0.1.0"
+
+rollingUpdate:
+  maxUnavailable: 0   # never drop below 3 ready pods during an update
+  maxSurge: 1
+
+spreadAcrossNodes: true
+
+configFiles:
+  mountPath: /app/config
+  files:
+    appsettings.k8s.json: |
+      {
+        "Orders": {
+          "Banner": "orders-api running in kind"
+        }
+      }
+
+secretFiles:
+  - secretName: sandbox-api-key   # created by scripts/deploy-apps.ps1, not stored in git
+    key: api-key
+    mountPath: /etc/orders-api/secret
+
+probes:
+  startup:
+    enabled: true
+
+ingress:
+  enabled: true
+  host: sandbox.localhost
+  path: /api
+  stripPrefix: true
+  tls:
+    secretName: sandbox-tls   # issued via the frontend Ingress; reused here

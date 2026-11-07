@@ -1,4 +1,4 @@
 # cert-manager: issues and renews TLS certificates from Certificate resources and Ingress annotations.
-# Chart: oci://quay.io/jetstack/charts/cert-manager v1.21.3. Installed by scripts/deploy-phase2.ps1.
+# Chart: oci://quay.io/jetstack/charts/cert-manager v1.21.3. Installed by scripts/deploy-infra.ps1.
 crds:
   enabled: true   # installs the CRDs (Certificate, Issuer, ClusterIssuer...) together with the chart

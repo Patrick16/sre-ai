@@ -1,0 +1,50 @@
+{{- if .Values.ingress.enabled }}
+{{- $name := include "sandbox-service.name" . -}}
+{{- if not .Values.service.enabled }}
+{{- fail "ingress.enabled requires service.enabled" }}
+{{- end }}
+{{- if .Values.ingress.stripPrefix }}
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: {{ $name }}-strip-prefix
+  labels:
+    {{- include "sandbox-service.labels" . | nindent 4 }}
+spec:
+  stripPrefix:
+    prefixes: [{{ .Values.ingress.path | quote }}]
+---
+{{- end }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "sandbox-service.labels" . | nindent 4 }}
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+    {{- if .Values.ingress.stripPrefix }}
+    traefik.ingress.kubernetes.io/router.middlewares: {{ .Release.Namespace }}-{{ $name }}-strip-prefix@kubernetescrd
+    {{- end }}
+    {{- with .Values.ingress.tls.clusterIssuer }}
+    cert-manager.io/cluster-issuer: {{ . }}
+    {{- end }}
+spec:
+  ingressClassName: traefik
+  {{- with .Values.ingress.tls.secretName }}
+  tls:
+    - hosts: [{{ required "ingress.host is required" $.Values.ingress.host | quote }}]
+      secretName: {{ . }}
+  {{- end }}
+  rules:
+    - host: {{ required "ingress.host is required" .Values.ingress.host | quote }}
+      http:
+        paths:
+          - path: {{ .Values.ingress.path }}
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ $name }}
+                port:
+                  name: http
+{{- end }}

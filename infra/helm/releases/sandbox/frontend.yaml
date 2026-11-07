@@ -1,0 +1,23 @@
+# helm upgrade --install frontend infra/helm/sandbox-service -n sandbox -f infra/helm/releases/sandbox/frontend.yaml
+replicas: 2
+
+image:
+  repository: sandbox/frontend
+  tag: "0.1.0"
+
+configEnv:
+  Frontend__Greeting: "Hello from Kubernetes"
+  OrdersApi__BaseUrl: "http://orders-api"
+
+secretEnv:
+  - name: OrdersApi__ApiKey
+    secretName: sandbox-api-key
+    key: api-key
+
+ingress:
+  enabled: true
+  host: sandbox.localhost
+  path: /
+  tls:
+    secretName: sandbox-tls
+    clusterIssuer: sandbox-ca

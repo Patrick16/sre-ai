@@ -27,7 +27,7 @@
 
 - [x] 3 sandbox-сервиса на .NET: `frontend` → `orders-api` ← `worker` (минимальный HTTP) — см. [10](10-phase-1-kubernetes-basics.md)
 - [x] Общий multi-stage Dockerfile, загрузка образов в kind (`scripts/build-images.ps1`)
-- [x] Сырые манифесты в `infra/manifests/phase-1/`: Namespace (Pod Security `restricted`), Deployment, Service
+- [x] Сырые манифесты (`infra/manifests/phase-1/`, с Фазы 3 — в истории git): Namespace (Pod Security `restricted`), Deployment, Service
 - [x] ConfigMap с настройками, Secret с API-ключом — подключены и как env, и как файл
 - [x] liveness/readiness/startup probes, resources requests/limits, securityContext
 - [ ] Пройти упражнения из [10-phase-1-kubernetes-basics.md](10-phase-1-kubernetes-basics.md) (удаление пода, scale, OOMKilled, rollout undo…)
@@ -46,10 +46,12 @@
 
 **Понять:** chart, release, values, шаблоны, зачем пакетировать манифесты.
 
-- [ ] Общий chart `infra/helm/sandbox-service` (один шаблон для всех сервисов)
-- [ ] Umbrella chart / values-файлы для окружения
-- [ ] Перевести всё из фазы 1–2 на Helm, удалить сырые манифесты из деплоя
-- [ ] Эксперимент: `helm upgrade` с новой версией, `helm rollback`
+- [x] Общий chart `infra/helm/sandbox-service` (один шаблон для всех сервисов, schema, `helm test`) — см. [12](12-phase-3-helm.md)
+- [x] Отдельный релиз и values-файл на сервис (`infra/helm/releases/sandbox/`) — выбран вместо umbrella-чарта
+- [x] Перевести всё из фазы 1–2 на Helm без простоя (`--take-ownership`, чистка `managedFields`), удалить сырые манифесты
+- [x] Эксперимент: `helm upgrade` с новой версией, `helm rollback` — 128/128 запросов без ошибок
+- [x] Разделить деплой на платформу (`deploy-infra.ps1`) и приложения (`deploy-apps.ps1`); проверено с нуля
+- [ ] Упражнения из [12-phase-3-helm.md](12-phase-3-helm.md) (failed release + авто-откат, drift через `kubectl scale`)
 
 ## Фаза 4. Хранение данных
 

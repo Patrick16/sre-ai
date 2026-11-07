@@ -1,0 +1,87 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["image"],
+  "properties": {
+    "replicas": { "type": "integer", "minimum": 0 },
+    "image": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["repository"],
+      "properties": {
+        "repository": { "type": "string", "minLength": 1 },
+        "tag": { "type": "string", "not": { "const": "latest" } },
+        "pullPolicy": { "enum": ["IfNotPresent", "Always", "Never"] }
+      }
+    },
+    "containerPort": { "type": "integer" },
+    "service": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "port": { "type": "integer" }
+      }
+    },
+    "env": { "type": "object", "additionalProperties": { "type": "string" } },
+    "configEnv": { "type": "object", "additionalProperties": { "type": "string" } },
+    "configFiles": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "mountPath": { "type": "string" },
+        "files": { "type": "object", "additionalProperties": { "type": "string" } }
+      }
+    },
+    "secretEnv": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "secretName", "key"],
+        "properties": {
+          "name": { "type": "string" },
+          "secretName": { "type": "string" },
+          "key": { "type": "string" }
+        }
+      }
+    },
+    "secretFiles": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["secretName", "key", "mountPath"],
+        "properties": {
+          "secretName": { "type": "string" },
+          "key": { "type": "string" },
+          "mountPath": { "type": "string" }
+        }
+      }
+    },
+    "probes": { "type": "object" },
+    "resources": { "type": "object" },
+    "rollingUpdate": { "type": "object" },
+    "shutdownDelaySeconds": { "type": "integer", "minimum": 0, "maximum": 25 },
+    "spreadAcrossNodes": { "type": "boolean" },
+    "ingress": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "host": { "type": "string" },
+        "path": { "type": "string" },
+        "stripPrefix": { "type": "boolean" },
+        "tls": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "secretName": { "type": "string" },
+            "clusterIssuer": { "type": "string" }
+          }
+        }
+      }
+    }
+  }
+}

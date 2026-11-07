@@ -1,0 +1,130 @@
+{{- $name := include "sandbox-service.name" . -}}
+{{- $tag := include "sandbox-service.tag" . -}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "sandbox-service.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicas }}
+  selector:
+    matchLabels:
+      {{- include "sandbox-service.selectorLabels" . | nindent 6 }}
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      {{- toYaml .Values.rollingUpdate | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "sandbox-service.labels" . | nindent 8 }}
+      {{- if .Values.configEnv }}
+      annotations:
+        checksum/config-env: {{ include (print $.Template.BasePath "/configmap-env.yaml") . | sha256sum }}
+      {{- end }}
+    spec:
+      {{- if .Values.spreadAcrossNodes }}
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              {{- include "sandbox-service.selectorLabels" . | nindent 14 }}
+      {{- end }}
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: {{ $name }}
+          image: "{{ .Values.image.repository }}:{{ $tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.containerPort }}
+          {{- if .Values.configEnv }}
+          envFrom:
+            - configMapRef:
+                name: {{ $name }}-config
+          {{- end }}
+          env:
+            - name: APP_VERSION
+              value: {{ $tag | quote }}
+            {{- if .Values.configFiles.files }}
+            # ConfigMap volumes are updated via symlink swaps that inotify misses; polling sees them.
+            - name: DOTNET_USE_POLLING_FILE_WATCHER
+              value: "true"
+            {{- end }}
+            {{- range $key, $value := .Values.env }}
+            - name: {{ $key }}
+              value: {{ $value | quote }}
+            {{- end }}
+            {{- range .Values.secretEnv }}
+            - name: {{ .name }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .secretName }}
+                  key: {{ .key }}
+            {{- end }}
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+            {{- if .Values.configFiles.files }}
+            - name: config-files
+              mountPath: {{ .Values.configFiles.mountPath }}
+              readOnly: true
+            {{- end }}
+            {{- range $i, $s := .Values.secretFiles }}
+            - name: secret-{{ $i }}
+              mountPath: {{ $s.mountPath }}
+              readOnly: true
+            {{- end }}
+          {{- with .Values.probes.startup }}
+          {{- if .enabled }}
+          startupProbe:
+            {{- include "sandbox-service.probe" . | nindent 12 }}
+          {{- end }}
+          {{- end }}
+          {{- with .Values.probes.liveness }}
+          {{- if .enabled }}
+          livenessProbe:
+            {{- include "sandbox-service.probe" . | nindent 12 }}
+          {{- end }}
+          {{- end }}
+          {{- with .Values.probes.readiness }}
+          {{- if .enabled }}
+          readinessProbe:
+            {{- include "sandbox-service.probe" . | nindent 12 }}
+          {{- end }}
+          {{- end }}
+          {{- if .Values.shutdownDelaySeconds }}
+          lifecycle:
+            preStop:
+              sleep:
+                seconds: {{ .Values.shutdownDelaySeconds }}
+          {{- end }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+      volumes:
+        - name: tmp
+          emptyDir: {}
+        {{- if .Values.configFiles.files }}
+        - name: config-files
+          configMap:
+            name: {{ $name }}-files
+        {{- end }}
+        {{- range $i, $s := .Values.secretFiles }}
+        - name: secret-{{ $i }}
+          secret:
+            secretName: {{ $s.secretName }}
+            items:
+              - key: {{ $s.key }}
+                path: {{ $s.key }}
+        {{- end }}

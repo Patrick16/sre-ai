@@ -23,12 +23,15 @@ Kubernetes объявил о его закрытии, и с марта 2026 у i
 |---|---|---|
 | Traefik v3.7 (chart 42.3.1) | Helm | namespace `traefik`, [values](../infra/helm/values/traefik.yaml) |
 | cert-manager v1.21.3 | Helm (OCI-чарт) | namespace `cert-manager`, [values](../infra/helm/values/cert-manager.yaml) |
-| Свой CA: `selfsigned` → `sandbox-root-ca` → ClusterIssuer `sandbox-ca` | манифест | [01-cluster-issuers.yaml](../infra/manifests/phase-2/01-cluster-issuers.yaml) |
-| Ingress `frontend` (`/`) и `orders-api` (`/api`), Middleware `strip-api` | манифест | [02-ingress.yaml](../infra/manifests/phase-2/02-ingress.yaml) |
+| Свой CA: `selfsigned` → `sandbox-root-ca` → ClusterIssuer `sandbox-ca` | манифест | [cluster-issuers.yaml](../infra/manifests/platform/cluster-issuers.yaml) |
+| Ingress `frontend` (`/`) и `orders-api` (`/api`), Middleware для `/api` | с Фазы 3 — шаблон чарта | [ingress.yaml](../infra/helm/sandbox-service/templates/ingress.yaml); исходный манифест: `git show 95f2f88:infra/manifests/phase-2/02-ingress.yaml` |
 
 ```powershell
-./scripts/deploy-phase2.ps1      # Helm-чарты → CA → Ingress, экспорт корневого CA в .local/
+./scripts/deploy-infra.ps1      # Traefik, cert-manager, CA, экспорт корневого CA в .local/
+./scripts/deploy-apps.ps1       # Ingress создаются Helm-релизами frontend и orders-api
 ```
+
+> С Фазы 3 Middleware называется `orders-api-strip-prefix` (а не `strip-api`) — его создаёт чарт.
 
 Инфраструктурные компоненты ставим **готовыми Helm-чартами сообщества** уже сейчас: писать их манифесты
 руками бессмысленно. Свой чарт для наших сервисов — тема Фазы 3.

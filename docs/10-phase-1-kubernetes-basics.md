@@ -3,6 +3,13 @@
 Теория по каждому объекту — в [03-kubernetes-concepts.md](03-kubernetes-concepts.md).
 Здесь — что именно развёрнуто, как это устроено и что можно потрогать руками.
 
+> **С Фазы 3 эти сырые манифесты заменены Helm-чартом** ([12-phase-3-helm.md](12-phase-3-helm.md)).
+> Сами файлы остались в истории git — смотреть их так же поучительно:
+> `git show 8a47ee6:infra/manifests/phase-1/orders-api.yaml` (а также `frontend.yaml`, `worker.yaml`, `00-namespace.yaml`).
+> Чтобы повторить фазу «руками», можно применить их на чистом кластере:
+> `git show 8a47ee6:infra/manifests/phase-1/orders-api.yaml | kubectl apply -f -`.
+> Объекты и поведение в кластере те же, поэтому упражнения ниже актуальны.
+
 ## Что развёрнуто
 
 ```
@@ -18,7 +25,7 @@
 
 | Объект | Файл | Чему учит |
 |---|---|---|
-| Namespace `sandbox` + Pod Security `restricted` | [00-namespace.yaml](../infra/manifests/phase-1/00-namespace.yaml) | Изоляция; API-сервер не пустит под, запущенный от root |
+| Namespace `sandbox` + Pod Security `restricted` | [namespace-sandbox.yaml](../infra/manifests/platform/namespace-sandbox.yaml) | Изоляция; API-сервер не пустит под, запущенный от root |
 | Deployment ×3, Service ×2 | `frontend.yaml`, `orders-api.yaml`, `worker.yaml` | Реплики, rolling update, стабильное DNS-имя |
 | ConfigMap → **env** | `frontend-config`, `worker-config` | Значение читается один раз при старте контейнера |
 | ConfigMap → **файл** | `orders-api-config` | Файл обновляется в живом поде (~1 мин) |
@@ -32,7 +39,8 @@
 ```powershell
 ./scripts/cluster-up.ps1        # если кластера ещё нет
 ./scripts/build-images.ps1      # docker build + kind load для 3 образов
-./scripts/deploy-phase1.ps1     # namespace → secret → kubectl apply -f infra/manifests/phase-1
+./scripts/deploy-infra.ps1      # namespace, Traefik, cert-manager (с Фазы 3)
+./scripts/deploy-apps.ps1       # secret + Helm-релизы сервисов (с Фазы 3)
 kubectl port-forward -n sandbox svc/frontend 8080:80
 ```
 
@@ -41,10 +49,11 @@ Invoke-RestMethod -Method Post "http://localhost:8080/order?item=book"
 Invoke-RestMethod http://localhost:8080/
 ```
 
-Чтобы понять механику, сделайте хотя бы раз вручную то, что делает скрипт:
-`kubectl apply -f infra/manifests/phase-1/00-namespace.yaml`, затем
+Чтобы понять механику, сделайте хотя бы раз вручную то, что делал скрипт Фазы 1 (на чистом кластере):
+`kubectl apply -f infra/manifests/platform/namespace-sandbox.yaml`, затем
 `kubectl create secret generic sandbox-api-key -n sandbox --from-literal=api-key=<что-нибудь>`,
-затем `kubectl apply -f infra/manifests/phase-1/` — и смотреть `kubectl get pods -n sandbox -w`.
+затем `git show 8a47ee6:infra/manifests/phase-1/orders-api.yaml | kubectl apply -f -` (и так для `frontend.yaml`, `worker.yaml`)
+— и смотреть `kubectl get pods -n sandbox -w`.
 
 ## Разбор ключевых мест в манифестах
 
@@ -68,8 +77,8 @@ Invoke-RestMethod http://localhost:8080/
 **securityContext.** `runAsNonRoot`, `readOnlyRootFilesystem`, `drop: [ALL]`, `seccompProfile` —
 ровно то, что требует профиль `restricted`. Корень ФС только для чтения, поэтому `/tmp` — отдельный `emptyDir`.
 
-**Secret не в git.** [deploy-phase1.ps1](../scripts/deploy-phase1.ps1) генерирует случайный ключ,
-если Secret'а ещё нет. В Фазе 3+ заменим на Sealed Secrets, чтобы секреты можно было хранить в репозитории зашифрованными.
+**Secret не в git.** Скрипт ([deploy-apps.ps1](../scripts/deploy-apps.ps1) с Фазы 3) генерирует случайный ключ,
+если Secret'а ещё нет. Позже можно заменить на Sealed Secrets, чтобы секреты хранились в репозитории зашифрованными.
 
 ## Что мы обнаружили при проверке (и почему это важно)
 
@@ -119,7 +128,7 @@ Kubelet синхронизирует тома с периодом около м�
 | 7 | Через port-forward к поду orders-api: `POST /debug/allocate?mb=300` | `kubectl describe pod` → `Last State: Terminated, Reason: OOMKilled`, `Restart Count: 1` |
 | 8 | «Плохой релиз»: `kubectl set image deploy/orders-api orders-api=sandbox/orders-api:0.9.9 -n sandbox` | Новый под в `ErrImagePull`/`ImagePullBackOff`, старые 3 продолжают работать (спасибо `maxUnavailable: 0`). Откат: `kubectl rollout undo deploy/orders-api -n sandbox` |
 | 9 | `kubectl rollout history deploy/orders-api -n sandbox` | История ревизий — то, что позже будет использовать агент для rollback |
-| 10 | Удалить Secret: `kubectl delete secret sandbox-api-key -n sandbox`, затем удалить под frontend | Новый под в `CreateContainerConfigError` — Secret нужен на старте. Вернуть: `./scripts/deploy-phase1.ps1` |
+| 10 | Удалить Secret: `kubectl delete secret sandbox-api-key -n sandbox`, затем удалить под frontend | Новый под в `CreateContainerConfigError` — Secret нужен на старте. Вернуть: `./scripts/deploy-apps.ps1` |
 | 11 | `docker stop sre-ai-worker2`, подождать ~5 мин | Нода `NotReady`, поды на ней через какое-то время пересоздаются на других нодах. Почему так долго — см. `tolerations` для `node.kubernetes.io/unreachable` в `kubectl get pod -o yaml` |
 
 ## Шпаргалка отладки

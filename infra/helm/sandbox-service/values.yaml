@@ -1,0 +1,81 @@
+# Defaults for every sandbox service. Per-service overrides live in infra/helm/releases/sandbox/<service>.yaml.
+# Resource names come from the release name: `helm install orders-api ...` -> Deployment/Service "orders-api".
+
+replicas: 1
+
+image:
+  repository: ""        # required, e.g. sandbox/orders-api
+  tag: ""               # empty -> Chart.appVersion
+  pullPolicy: IfNotPresent
+
+containerPort: 8080
+
+service:
+  enabled: true         # false for services nobody calls (worker)
+  port: 80
+
+# Plain env vars: NAME: value
+env: {}
+
+# Rendered into ConfigMap <name>-config and injected with envFrom.
+# Env vars are read only at container start, so the pod template carries a checksum of this ConfigMap:
+# any change here changes the checksum and triggers a rolling restart.
+configEnv: {}
+
+# Rendered into ConfigMap <name>-files and mounted as files; no restart on change (the app reloads them).
+configFiles:
+  mountPath: /app/config
+  files: {}             # filename: content
+
+# Env vars from Secrets: [{ name, secretName, key }]
+secretEnv: []
+
+# Secret keys mounted as files: [{ secretName, key, mountPath }] -> <mountPath>/<key>
+secretFiles: []
+
+probes:
+  startup:
+    enabled: false
+    path: /health/live
+    periodSeconds: 2
+    failureThreshold: 30
+  liveness:
+    enabled: true
+    path: /health/live
+    periodSeconds: 10
+    failureThreshold: 3
+  readiness:
+    enabled: true
+    path: /health/ready
+    periodSeconds: 5
+    failureThreshold: 2
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 64Mi
+  limits:
+    cpu: 500m
+    memory: 256Mi
+
+rollingUpdate:
+  maxUnavailable: 25%
+  maxSurge: 25%
+
+# On shutdown the pod keeps serving this long before the app gets SIGTERM, so that Traefik/kube-proxy
+# have time to drop it from their endpoint lists. Without it, a rollout loses a few in-flight requests.
+shutdownDelaySeconds: 5
+
+# Prefer putting replicas on different nodes.
+spreadAcrossNodes: false
+
+ingress:
+  enabled: false
+  host: ""
+  path: /
+  # Strip `path` before forwarding (Traefik Middleware; not part of the Ingress spec).
+  stripPrefix: false
+  tls:
+    secretName: ""
+    # Set on exactly ONE Ingress per secretName, otherwise two Certificates fight over the same secret.
+    clusterIssuer: ""

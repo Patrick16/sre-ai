@@ -1,5 +1,5 @@
 # Traefik as the Ingress Controller (ingress-nginx was retired in March 2026).
-# Chart: traefik/traefik 42.3.1 (Traefik v3.7). Installed by scripts/deploy-phase2.ps1.
+# Chart: traefik/traefik 42.3.1 (Traefik v3.7). Installed by scripts/deploy-infra.ps1.
 
 # kind has no cloud load balancer. Instead the control-plane node's ports 80/443 are mapped to the
 # host (infra/cluster/kind-config.yaml), and Traefik binds them as hostPorts on that node.
