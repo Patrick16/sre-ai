@@ -115,7 +115,9 @@ public sealed class AgentTools(IKubernetes kube, PrometheusClient prometheus, Lo
 
     [Description("Run a PromQL instant query against Prometheus. Useful series: slo:sli_error:ratio_rate5m (share of bad requests per slo), " +
                  "http_server_request_duration_seconds_count/_bucket (labels app, http_route, http_response_status_code), pg_up, " +
-                 "kube_pod_container_status_restarts_total, container_memory_working_set_bytes, request_total (Linkerd, labels deployment, direction, tls).")]
+                 "db_client_operation_duration_seconds_bucket (database query time seen by orders-api), " +
+                 "kube_pod_container_status_restarts_total, container_memory_working_set_bytes, container_cpu_cfs_throttled_periods_total, " +
+                 "request_total (Linkerd, labels deployment, direction, tls).")]
     public async Task<string> QueryMetricsAsync([Description("PromQL expression, e.g. sum by (app) (rate(http_server_request_duration_seconds_count{namespace=\"sandbox\"}[5m]))")] string promql, CancellationToken ct)
     {
         var (samples, error) = await prometheus.QueryAsync(promql, ct);
@@ -158,7 +160,11 @@ public sealed class AgentTools(IKubernetes kube, PrometheusClient prometheus, Lo
         var statuses = p.Status.ContainerStatuses ?? [];
         var ready = statuses.Count(c => c.Ready);
         var restarts = statuses.Sum(c => c.RestartCount);
-        var lastReason = statuses.Select(c => c.LastState?.Terminated?.Reason).FirstOrDefault(r => r is not null);
+        // WHEN matters as much as why: lastState survives as long as the pod does. In the Phase 9 game day a "last:
+        // OOMKilled" from a scenario 90 minutes earlier made the model blame memory for a database slowdown.
+        var last = statuses.Select(c => c.LastState?.Terminated).FirstOrDefault(t => t is not null);
+        var lastReason = last is null ? null
+            : $"{last.Reason}{(last.FinishedAt is { } at ? $" {(int)(DateTime.UtcNow - at).TotalMinutes} min ago" : "")}";
         var waiting = statuses.Select(c => c.State?.Waiting?.Reason).FirstOrDefault(r => r is not null);
         var age = DateTime.UtcNow - (p.Status.StartTime ?? p.Metadata.CreationTimestamp ?? DateTime.UtcNow);
         return $"{p.Metadata.Name}  {p.Status.Phase}{(waiting is null ? "" : $"/{waiting}")}  ready {ready}/{statuses.Count}  restarts {restarts}" +

@@ -1,0 +1,14 @@
+# Kill ONE orders-api pod (of 3). Steady-state hypothesis: users don't notice -
+# readiness takes the pod out of the endpoints, Linkerd retries the failed GETs, the ReplicaSet creates a new pod.
+apiVersion: chaos-mesh.org/v1alpha1
+kind: PodChaos
+metadata:
+  name: pod-kill-orders-api
+  namespace: sandbox
+spec:
+  action: pod-kill
+  mode: one                    # blast radius: a single, randomly chosen pod
+  selector:
+    namespaces: [sandbox]
+    labelSelectors:
+      app.kubernetes.io/name: orders-api

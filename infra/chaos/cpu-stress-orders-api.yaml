@@ -1,0 +1,19 @@
+# Burn CPU inside every orders-api container (stress-ng in the container's cgroup, so it counts against the
+# 500m CPU limit): the kernel throttles the container, requests wait for CPU - latency up, errors not.
+apiVersion: chaos-mesh.org/v1alpha1
+kind: StressChaos
+metadata:
+  name: cpu-stress-orders-api
+  namespace: sandbox
+spec:
+  mode: all
+  selector:
+    namespaces: [sandbox]
+    labelSelectors:
+      app.kubernetes.io/name: orders-api
+  containerNames: [orders-api]   # not the linkerd-proxy sidecar
+  stressors:
+    cpu:
+      workers: 2
+      load: 100
+  duration: 10m

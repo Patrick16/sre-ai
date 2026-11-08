@@ -5,6 +5,7 @@ using OpenTelemetry.Metrics;
 using OpenTelemetry.Resources;
 
 var builder = WebApplication.CreateBuilder(args);
+builder.AddFaults(); // Phase 9: chaos "bad modes" from /app/faults/faults.json (all off by default)
 
 builder.Services.AddSingleton<Heartbeat>();
 builder.Services.AddSingleton<WorkerMetrics>();
@@ -27,6 +28,8 @@ builder.Services.AddOpenTelemetry()
 var app = builder.Build();
 
 app.UseOpenTelemetryPrometheusScrapingEndpoint(ctx => ctx.Connection.LocalPort == 9090 && ctx.Request.Path == "/metrics");
+
+app.UseFaults();
 
 // Liveness = "is my own loop still turning", never "is orders-api up": a dependency outage must not restart us.
 app.MapHealthChecks("/health/live", new() { Predicate = c => c.Tags.Contains("live") });

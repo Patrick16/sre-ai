@@ -8,6 +8,7 @@ using OpenTelemetry.Metrics;
 using OpenTelemetry.Resources;
 
 var builder = WebApplication.CreateBuilder(args);
+builder.AddFaults(); // Phase 9: chaos "bad modes" from /app/faults/faults.json (all off by default)
 
 // Mounted from a ConfigMap as a file: unlike env vars, edits reach the running pod without a restart.
 builder.Configuration.AddJsonFile("config/appsettings.k8s.json", optional: true, reloadOnChange: true);
@@ -56,6 +57,8 @@ app.Use(async (ctx, next) =>
     ctx.Response.Headers["X-Served-By"] = pod;
     await next();
 });
+
+app.UseFaults();
 
 // Probes deliberately ignore the database: if it is down, every replica would go unready/restart at once
 // and the outage would look like an orders-api problem. /health/db is for humans, dashboards and the agent.

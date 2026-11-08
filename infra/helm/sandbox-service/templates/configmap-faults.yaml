@@ -1,0 +1,13 @@
+{{- if .Values.faults.enabled }}
+# Phase 9: the service's "bad modes" for chaos experiments. Deliberately NOT in the pod-template checksum:
+# changing it must not restart the pods (a restart would hide a leak and isn't what a real bug does).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "sandbox-service.name" . }}-faults
+  labels:
+    {{- include "sandbox-service.labels" . | nindent 4 }}
+data:
+  faults.json: |
+    {{- dict "Faults" (dict "LatencyMs" (int .Values.faults.latencyMs) "LatencyRatio" .Values.faults.latencyRatio "ErrorRatio" .Values.faults.errorRatio "LeakMbPerMinute" (int .Values.faults.leakMbPerMinute)) | toJson | nindent 4 }}
+{{- end }}

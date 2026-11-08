@@ -32,7 +32,8 @@ foreach ($repo in @(
         @('prometheus-community', 'https://prometheus-community.github.io/helm-charts'),
         @('grafana', 'https://grafana.github.io/helm-charts'),
         @('traefik', 'https://traefik.github.io/charts'),
-        @('linkerd-edge', 'https://helm.linkerd.io/edge'))) {
+        @('linkerd-edge', 'https://helm.linkerd.io/edge'),
+        @('chaos-mesh', 'https://charts.chaos-mesh.org'))) {
     Invoke-Checked { helm repo add $repo[0] $repo[1] --force-update | Out-Null } "helm repo add $($repo[0])"
 }
 
@@ -101,6 +102,12 @@ Invoke-Checked {
     helm upgrade --install alloy grafana/alloy --version 1.15.0 `
         -n monitoring -f (Join-Path $values 'alloy.yaml') --wait --timeout 5m
 } 'alloy install'
+
+# Phase 9: chaos engineering. Last: nothing depends on it, and it must never be a prerequisite of the platform.
+Invoke-Checked {
+    helm upgrade --install chaos-mesh chaos-mesh/chaos-mesh --version 2.8.7 `
+        -n chaos-mesh -f (Join-Path $values 'chaos-mesh.yaml') --wait --timeout 5m
+} 'chaos-mesh install'
 
 Invoke-Checked {
     helm upgrade --install sandbox-observability (Join-Path $helm 'sandbox-observability') -n monitoring --wait

@@ -84,14 +84,19 @@ app.MapPost("/webhooks/alertmanager", (AlertmanagerWebhook payload, AlertInbox i
     return Results.Ok(new { started = false, reason = $"run {queue.ActiveRunFor(o.Namespace)} is already looking at {o.Namespace}" });
 });
 
-// Manual run: POST /runs  {"goal": "...", "model": "qwen/qwen3.5-9b"}  (both optional)
+// Manual run: POST /runs  {"goal": "...", "model": "qwen/qwen3.5-9b"}  (both optional) - a one-iteration health check.
+// Incident:   POST /runs  {"incident": true, "note": "users report errors on the site"} - works until steady state,
+//             like an alert run (Phase 9: game days declare incidents instead of waiting 10-30 min for a burn-rate page).
 app.MapPost("/runs", (ManualRun? body, RunQueue queue, OpenAiCompatibleChatClientFactory llm, IOptions<AgentOptions> options, TimeProvider time) =>
 {
     var ns = options.Value.Namespace;
     if (body?.Model is { Length: > 0 } m && !llm.Models.Contains(m, StringComparer.OrdinalIgnoreCase))
         return Results.BadRequest(new { error = $"model '{m}' is not allowed", allowed = llm.Models });
-    var task = queue.NewTask(new TriggerEvent(TriggerKind.Manual, [], "started by a human", time.GetUtcNow()),
-        string.IsNullOrWhiteSpace(body?.Goal) ? Goals.HealthCheck(ns) : body.Goal);
+    var task = body?.Incident == true
+        ? queue.NewTask(new TriggerEvent(TriggerKind.Incident, [], body.Note ?? "incident declared by a human", time.GetUtcNow()),
+            string.IsNullOrWhiteSpace(body.Goal) ? Goals.ForIncident(ns, body.Note) : body.Goal)
+        : queue.NewTask(new TriggerEvent(TriggerKind.Manual, [], "started by a human", time.GetUtcNow()),
+            string.IsNullOrWhiteSpace(body?.Goal) ? Goals.HealthCheck(ns) : body.Goal);
     return queue.TryEnqueue(new RunRequest(task, body?.Model))
         ? Results.Accepted($"/runs/{task.Id}", new { runId = task.Id })
         : Results.Conflict(new { error = $"run {queue.ActiveRunFor(ns)} is already active for {ns}" });
@@ -121,7 +126,7 @@ app.MapPost("/approvals/{id}", (string id, ApprovalBody body, ApprovalGate gate,
 
 app.Run();
 
-record ManualRun(string? Goal, string? Model);
+record ManualRun(string? Goal, string? Model, bool? Incident, string? Note);
 
 record ApprovalBody(bool Approve, string? By);
 

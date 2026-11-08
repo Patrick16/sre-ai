@@ -125,11 +125,14 @@
 
 **Понять:** steady state, гипотеза, blast radius, game day.
 
-- [ ] Chaos Mesh: pod-kill, network-delay, CPU stress
-- [ ] Свой простой chaos-инструмент на .NET (например, «убить случайный под в namespace»)
-- [ ] «Плохие» режимы в sandbox-сервисах (утечка памяти, медленные ответы, 500-ки по флагу)
-- [ ] Сценарии: эксперимент → алерт → агент → действие → отчёт; оценить качество агента
-- [ ] Game day: серия экспериментов с разбором
+- [x] Chaos Mesh 2.8.7 (только namespace `sandbox`): pod-kill, network-delay, CPU stress — гипотезы проверены, одна опровергнута — см. [18](18-phase-9-chaos-engineering.md)
+- [x] Свой chaos-инструмент на .NET: `src/Chaos.Monkey` (случайный под, только `sandbox`, не последние ready, dry run по умолчанию)
+- [x] «Плохие» режимы в sandbox-сервисах: задержка, 500-ки, утечка памяти — `faults:` в values, без рестарта подов
+- [x] Агент 0.5.0: инцидент, объявленный человеком (`POST /runs {"incident": true}`); steady state включает ready-поды и отсутствие рестартов
+- [x] Сценарии и оценка агента: `scripts/game-day.ps1` + `infra/chaos/scenarios.json` → scorecard
+- [x] Game day: 5 сценариев с разбором; провальный (задержка БД) — повторён 3 раза: 0/3 → 2/3 за счёт данных Retrieve (латентность, возраст событий)
+- [x] Находка: холодный старт mesh после перезапуска Docker Desktop → `scripts/recover-mesh.ps1`
+- [ ] Упражнения из [18](18-phase-9-chaos-engineering.md)
 
 ## Фаза 10. Полировка
 

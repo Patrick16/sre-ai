@@ -26,6 +26,17 @@
     },
     "env": { "type": "object", "additionalProperties": { "type": "string" } },
     "configEnv": { "type": "object", "additionalProperties": { "type": "string" } },
+    "faults": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "latencyMs": { "type": "integer", "minimum": 0, "maximum": 10000 },
+        "latencyRatio": { "type": "number", "minimum": 0, "maximum": 1 },
+        "errorRatio": { "type": "number", "minimum": 0, "maximum": 1 },
+        "leakMbPerMinute": { "type": "integer", "minimum": 0, "maximum": 500 }
+      }
+    },
     "configFiles": {
       "type": "object",
       "additionalProperties": false,

@@ -1,6 +1,10 @@
 namespace SreAgent.Core;
 
-public enum TriggerKind { Alert, Schedule, Manual }
+/// <summary>
+/// Alert: from Alertmanager. Incident: a human declared one ("users report errors") - like an alert, the run works
+/// until steady state. Manual/Schedule: a one-off health check, one iteration.
+/// </summary>
+public enum TriggerKind { Alert, Schedule, Manual, Incident }
 
 public sealed record AlertInfo(
     string Name,

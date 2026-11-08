@@ -15,10 +15,10 @@ $src      = Join-Path $repo 'src'
 $sandbox  = Join-Path $src 'Sandbox.Services'
 $releases = Join-Path $repo 'infra' 'helm' 'releases'
 $images = @{
-    'frontend'   = @{ Image = 'sandbox/frontend';   Dockerfile = Join-Path $sandbox 'Dockerfile'; Context = Join-Path $sandbox 'Frontend';  Project = 'Sandbox.Frontend' }
-    'orders-api' = @{ Image = 'sandbox/orders-api'; Dockerfile = Join-Path $sandbox 'Dockerfile'; Context = Join-Path $sandbox 'OrdersApi'; Project = 'Sandbox.OrdersApi' }
-    'worker'     = @{ Image = 'sandbox/worker';     Dockerfile = Join-Path $sandbox 'Dockerfile'; Context = Join-Path $sandbox 'Worker';    Project = 'Sandbox.Worker' }
-    # The agent references the other SreAgent.* projects, so its build context is the whole src/.
+    'frontend'   = @{ Image = 'sandbox/frontend';   Dockerfile = Join-Path $sandbox 'Dockerfile'; Context = $sandbox; Dir = 'Frontend';  Project = 'Sandbox.Frontend' }
+    'orders-api' = @{ Image = 'sandbox/orders-api'; Dockerfile = Join-Path $sandbox 'Dockerfile'; Context = $sandbox; Dir = 'OrdersApi'; Project = 'Sandbox.OrdersApi' }
+    'worker'     = @{ Image = 'sandbox/worker';     Dockerfile = Join-Path $sandbox 'Dockerfile'; Context = $sandbox; Dir = 'Worker';    Project = 'Sandbox.Worker' }
+    # Sandbox services: context = src/Sandbox.Services (they share Shared/Faults.cs). The agent references the other SreAgent.* projects, so its build context is the whole src/.
     'sre-agent'  = @{ Image = 'sre-agent/host';     Dockerfile = Join-Path $src 'SreAgent.Host' 'Dockerfile'; Context = $src }
 }
 
@@ -35,7 +35,7 @@ foreach ($service in $Services) {
 
     Write-Host "==> $image"
     $buildArgs = @('-f', $spec.Dockerfile, '-t', $image)
-    if ($spec.Project) { $buildArgs += @('--build-arg', "PROJECT=$($spec.Project)") }
+    if ($spec.Project) { $buildArgs += @('--build-arg', "PROJECT=$($spec.Project)", '--build-arg', "DIR=$($spec.Dir)") }
     docker build @buildArgs $spec.Context
     if ($LASTEXITCODE -ne 0) { throw "docker build failed for $service" }
 

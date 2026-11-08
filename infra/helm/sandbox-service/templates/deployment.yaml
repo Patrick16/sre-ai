@@ -91,6 +91,12 @@ spec:
             - name: data
               mountPath: {{ .Values.persistence.mountPath }}
             {{- end }}
+            {{- if .Values.faults.enabled }}
+            # A directory mount, never subPath: only then does kubelet update the file in the running pod.
+            - name: faults
+              mountPath: /app/faults
+              readOnly: true
+            {{- end }}
             {{- if .Values.configFiles.files }}
             - name: config-files
               mountPath: {{ .Values.configFiles.mountPath }}
@@ -139,6 +145,11 @@ spec:
         - name: data
           persistentVolumeClaim:
             claimName: {{ $name }}-data
+        {{- end }}
+        {{- if .Values.faults.enabled }}
+        - name: faults
+          configMap:
+            name: {{ $name }}-faults
         {{- end }}
         {{- if .Values.configFiles.files }}
         - name: config-files

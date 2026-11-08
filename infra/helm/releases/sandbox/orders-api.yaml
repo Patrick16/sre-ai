@@ -3,7 +3,7 @@ replicas: 3
 
 image:
   repository: sandbox/orders-api
-  tag: "0.3.1"   # 0.2.x: PostgreSQL; 0.3.0: OpenTelemetry metrics on :9090, JSON logs; 0.3.1: no GSSAPI probing
+  tag: "0.4.0"   # 0.2.x: PostgreSQL; 0.3.0: OpenTelemetry metrics on :9090, JSON logs; 0.3.1: no GSSAPI probing; 0.4.0: fault modes (Phase 9)
 
 # 99% of requests must be non-5xx and faster than 250 ms (0.25 is a bucket boundary of http.server.request.duration).
 slo:
@@ -26,6 +26,10 @@ configFiles:
           "Banner": "orders-api running in kind"
         }
       }
+
+# Phase 9: chaos "bad modes", all off. Experiments switch them with --set (scripts/game-day.ps1).
+faults:
+  enabled: true
 
 configEnv:
   Orders__Db__Host: "postgres"        # Service of the postgres release

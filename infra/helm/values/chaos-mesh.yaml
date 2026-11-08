@@ -1,0 +1,18 @@
+# Chaos Mesh 2.8.7 (Phase 9, docs/18). Experiments are CRDs (PodChaos, NetworkChaos, StressChaos...) in infra/chaos/.
+controllerManager:
+  replicaCount: 1            # default 3 (HA); one is enough on a laptop
+  # Blast radius, enforced by the controller: experiments may only target namespaces annotated
+  # chaos-mesh.org/inject=enabled - only `sandbox` (namespace-sandbox.yaml). Never monitoring or the agent.
+  enableFilterNamespace: true
+
+chaosDaemon:
+  # kind nodes run containerd, not Docker. The daemon (a privileged DaemonSet) enters the target pod's
+  # namespaces/cgroups to inject faults - that's why its namespace is Pod Security "privileged".
+  runtime: containerd
+  socketPath: /run/containerd/containerd.sock
+
+dashboard:
+  create: false              # experiments are YAML in git; kubectl get podchaos/networkchaos shows their status
+
+dnsServer:
+  create: false              # DNSChaos isn't used

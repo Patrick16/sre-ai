@@ -1,0 +1,18 @@
+# +300 ms on every packet the postgres pod sends (so on every query answer). orders-api's latency SLO is
+# "99% under 250 ms" - it must burn, and the investigation must point at the database, not at orders-api.
+apiVersion: chaos-mesh.org/v1alpha1
+kind: NetworkChaos
+metadata:
+  name: network-delay-postgres
+  namespace: sandbox
+spec:
+  action: delay
+  mode: all
+  selector:
+    namespaces: [sandbox]
+    labelSelectors:
+      app.kubernetes.io/name: postgres
+  delay:
+    latency: 300ms
+    jitter: 20ms
+  duration: 10m                # ends by itself

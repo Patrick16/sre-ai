@@ -138,6 +138,12 @@ public static class Goals
         "(the alerts resolved and every service's share of bad requests back under 1%), and recommend what a human should do. " +
         "If an available action would clearly help, propose it; the guardrails decide whether it runs.";
 
+    public static string ForIncident(string ns, string? note) =>
+        $"An incident was declared for namespace \"{ns}\"{(string.IsNullOrWhiteSpace(note) ? "" : $": \"{note}\"")}. " +
+        "Find the most likely root cause (not just the symptom), track whether the namespace returns to steady state " +
+        "(every service's share of bad requests back under 1%, all pods ready, no container restarts), and recommend what a human should do. " +
+        "If an available action would clearly help, propose it; the guardrails decide whether it runs.";
+
     public static string HealthCheck(string ns) =>
         $"Routine health check of namespace \"{ns}\". Summarize its state, point out anything abnormal or risky " +
         "(restarts, error rates, latency, saturation, failing dependencies), and recommend what a human should look at.";

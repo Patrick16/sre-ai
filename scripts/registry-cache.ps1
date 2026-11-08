@@ -23,6 +23,7 @@ $caches = [ordered]@{
     'docker.io'       = 'https://registry-1.docker.io'
     'quay.io'         = 'https://quay.io'
     'registry.k8s.io' = 'https://registry.k8s.io'
+    'ghcr.io'         = 'https://ghcr.io'          # Phase 9: Chaos Mesh images
 }
 function Get-CacheName([string]$Registry) { 'kind-cache-' + ($Registry -replace '\.', '-') }
 

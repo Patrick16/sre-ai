@@ -13,4 +13,9 @@
     <PackageReference Include="OpenTelemetry.Extensions.Hosting" Version="1.20.1" />
   </ItemGroup>
 
+  <!-- Phase 9: the fault modes shared by all sandbox services (one file, compiled into each). -->
+  <ItemGroup>
+    <Compile Include="../Shared/*.cs" Link="Shared/%(Filename)%(Extension)" />
+  </ItemGroup>
+
 </Project>

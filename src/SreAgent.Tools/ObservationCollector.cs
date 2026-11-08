@@ -68,6 +68,26 @@ public sealed class ObservationCollector(IKubernetes kube, PrometheusClient prom
             return error is not null ? $"unavailable: {error}" : PrometheusClient.Format(samples, 15);
         });
 
+        // Phase 9 game day: with +300 ms on the database the SLIs burned, but the snapshot only showed status codes
+        // (all 200) - the model hunted for errors that didn't exist. A "bad request" can be a SLOW request.
+        await Section(sb, "Latency per service, p50 / p99 (5m)", async () =>
+        {
+            var sel = $"namespace=\"{ns}\", http_route=~\".+\", http_route!~\"/health.*\"";
+            var (p50, e1) = await prometheus.QueryAsync($"histogram_quantile(0.5, sum by (app, le) (rate(http_server_request_duration_seconds_bucket{{{sel}}}[5m])))", ct);
+            var (p99, e2) = await prometheus.QueryAsync($"histogram_quantile(0.99, sum by (app, le) (rate(http_server_request_duration_seconds_bucket{{{sel}}}[5m])))", ct);
+            var (db, e3) = await prometheus.QueryAsync($"histogram_quantile(0.99, sum by (app, le) (rate(db_client_operation_duration_seconds_bucket{{namespace=\"{ns}\"}}[5m])))", ct);
+            if (e1 is not null || e2 is not null) return $"unavailable: {e1 ?? e2}";
+            var lines = p99.Select(s =>
+            {
+                var app = s.Labels.GetValueOrDefault("app", "?");
+                var median = p50.FirstOrDefault(x => x.Labels.GetValueOrDefault("app") == app)?.Value;
+                return $"- {app}: p50 {Ms(median)}, p99 {Ms(s.Value)} (HTTP requests it serves)";
+            }).ToList();
+            if (e3 is null)
+                lines.AddRange(db.Select(s => $"- {s.Labels.GetValueOrDefault("app", "?")} -> database: p99 {Ms(s.Value)} per query (as seen by the client)"));
+            return lines.Count == 0 ? "no data" : string.Join('\n', lines);
+        });
+
         await Section(sb, "Database", async () =>
         {
             var (samples, error) = await prometheus.QueryAsync($"pg_up{{namespace=\"{ns}\"}}", ct);
@@ -92,6 +112,8 @@ public sealed class ObservationCollector(IKubernetes kube, PrometheusClient prom
         return sb.ToString().TrimEnd();
     }
 
+    private static string Ms(double? seconds) => seconds is { } v && double.IsFinite(v) ? $"{v * 1000:0} ms" : "n/a";
+
     private static async Task Section(StringBuilder sb, string title, Func<Task<string>> body)
     {
         sb.AppendLine();
@@ -109,8 +131,10 @@ public sealed class ObservationCollector(IKubernetes kube, PrometheusClient prom
 
 /// <summary>
 /// F of RALF / the Ralph loop's stop condition: is the namespace in steady state RIGHT NOW?
-///   1. none of the alerts that started the run is firing any more, and
-///   2. every SLO's 5-minute share of bad requests is within its budget (1%).
+///   1. none of the alerts that started the run is firing any more (alert runs; an incident has no trigger alerts),
+///   2. every SLO's 5-minute share of bad requests is within its budget (1%), and
+///   3. every pod is ready and no container restarted in the last 5 minutes (Phase 9: a memory leak keeps the SLIs
+///      green while pods get OOMKilled one after another - that is not steady state).
 /// Not "no alerts at all": burn-rate alerts lag on purpose - after a 5-minute outage the 6h/30m page can stay on for
 /// ~30 minutes and the 1d/3d tickets for hours, long after the system recovered. Those are listed for the human.
 /// Scheduled or manual check: one iteration is the whole task.
@@ -121,7 +145,7 @@ public sealed class AlertsResolvedCompletionCheck(AlertmanagerClient alertmanage
 
     public async Task<CompletionStatus> CheckAsync(TaskSpec task, int iteration, CancellationToken ct)
     {
-        if (task.Trigger.Kind != TriggerKind.Alert)
+        if (task.Trigger.Kind is not (TriggerKind.Alert or TriggerKind.Incident))
             return new CompletionStatus(true, "one-off health check: a single iteration is the whole task");
 
         var active = (await alertmanager.ActiveAsync(ct)).Where(a => a.Namespace == task.Namespace).ToList();
@@ -142,9 +166,20 @@ public sealed class AlertsResolvedCompletionCheck(AlertmanagerClient alertmanage
         if (burning.Count > 0)
             return new CompletionStatus(false, $"triggering alerts resolved, but bad requests over the last 5m exceed 1%: {string.Join(", ", burning)}");
 
+        var (restarts, rError) = await prometheus.QueryAsync(
+            $"sum by (pod) (increase(kube_pod_container_status_restarts_total{{namespace=\"{task.Namespace}\"}}[5m])) > 0", ct);
+        if (rError is null && restarts.Count > 0)
+            return new CompletionStatus(false, $"SLIs within budget, but containers restarted in the last 5m: {string.Join(", ", restarts.Select(r => $"{r.Labels.GetValueOrDefault("pod", "?")} x{r.Value:0}"))}");
+        var (notReady, nError) = await prometheus.QueryAsync(
+            // Only live pods: a Completed/terminated pod is "not ready" too, and that's fine.
+            $"sum by (pod) (kube_pod_status_ready{{namespace=\"{task.Namespace}\", condition=\"false\"}} * on (namespace, pod) group_left () " +
+            $"(kube_pod_status_phase{{namespace=\"{task.Namespace}\", phase=~\"Running|Pending\"}} == 1)) > 0", ct);
+        if (nError is null && notReady.Count > 0)
+            return new CompletionStatus(false, $"SLIs within budget, but pods are not ready: {string.Join(", ", notReady.Select(r => r.Labels.GetValueOrDefault("pod", "?")))}");
+
         var lagging = active.Where(a => !triggers.Contains(a.Name)).Select(a => a.Name).Distinct().ToList();
         return new CompletionStatus(true,
-            "steady state: triggering alerts resolved and every SLI is within budget over the last 5m" +
+            "steady state: triggering alerts resolved, every SLI within budget over the last 5m, all pods ready, no restarts" +
             (lagging.Count > 0 ? $"; still firing (lagging error-budget alerts, for a human): {string.Join(", ", lagging)}" : ""));
     }
 }

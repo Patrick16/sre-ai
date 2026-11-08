@@ -5,8 +5,20 @@ metadata:
   annotations:
     # Linkerd's proxy-injector adds the mTLS proxy to every pod created here (existing pods: after a restart).
     linkerd.io/inject: enabled
+    # Phase 9: the only namespace Chaos Mesh may target (controllerManager.enableFilterNamespace).
+    chaos-mesh.org/inject: enabled
   labels:
     app.kubernetes.io/part-of: sandbox
     # Pod Security Admission: the API server rejects pods that run as root, escalate privileges, etc.
     pod-security.kubernetes.io/enforce: restricted
     pod-security.kubernetes.io/warn: restricted
+---
+# Phase 9: Chaos Mesh. chaos-daemon is a privileged DaemonSet (it enters other pods' network and cgroup
+# namespaces to inject delays/stress) - infrastructure only, like monitoring.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: chaos-mesh
+  labels:
+    pod-security.kubernetes.io/enforce: privileged
+    pod-security.kubernetes.io/warn: baseline

@@ -5,6 +5,7 @@
     <Project Path="src/Sandbox.Services/Worker/Sandbox.Worker.csproj" />
   </Folder>
   <Folder Name="/src/">
+    <Project Path="src/Chaos.Monkey/Chaos.Monkey.csproj" />
     <Project Path="src/SreAgent.Core/SreAgent.Core.csproj" />
     <Project Path="src/SreAgent.Host/SreAgent.Host.csproj" />
     <Project Path="src/SreAgent.LlmClients/SreAgent.LlmClients.csproj" />

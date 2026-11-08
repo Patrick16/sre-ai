@@ -3,13 +3,17 @@ replicas: 2
 
 image:
   repository: sandbox/frontend
-  tag: "0.3.0"   # 0.3.0: OpenTelemetry metrics on :9090, JSON logs
+  tag: "0.4.0"   # 0.3.0: OpenTelemetry metrics on :9090, JSON logs; 0.4.0: fault modes (Phase 9)
 
 # The user-facing SLO: includes the time frontend waits for orders-api.
 slo:
   enabled: true
   objective: 0.99
   latencyThresholdSeconds: "0.5"
+
+# Phase 9: chaos "bad modes", all off. Experiments switch them with --set (scripts/game-day.ps1).
+faults:
+  enabled: true
 
 configEnv:
   Frontend__Greeting: "Hello from Kubernetes"

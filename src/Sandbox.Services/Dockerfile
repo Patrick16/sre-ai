@@ -1,13 +1,16 @@
-# One Dockerfile for all sandbox services; the build context is the service's own folder:
-#   docker build -f src/Sandbox.Services/Dockerfile --build-arg PROJECT=Sandbox.Frontend src/Sandbox.Services/Frontend
+# One Dockerfile for all sandbox services; the build context is src/Sandbox.Services (the services share Shared/):
+#   docker build -f src/Sandbox.Services/Dockerfile --build-arg DIR=Frontend --build-arg PROJECT=Sandbox.Frontend src/Sandbox.Services
 # Stage 1 has the SDK (~1 GB) and compiles; stage 2 has only the runtime, so the final image stays small.
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 ARG PROJECT
+ARG DIR
 WORKDIR /src
-COPY *.csproj ./
-RUN dotnet restore
-COPY . ./
-RUN dotnet publish "$PROJECT.csproj" -c Release -o /app --no-restore
+# The .csproj first: restore is cached as long as the dependencies don't change.
+COPY $DIR/*.csproj $DIR/
+RUN dotnet restore "$DIR/$PROJECT.csproj"
+COPY Shared/ Shared/
+COPY $DIR/ $DIR/
+RUN dotnet publish "$DIR/$PROJECT.csproj" -c Release -o /app --no-restore
 
 FROM mcr.microsoft.com/dotnet/aspnet:10.0
 ARG PROJECT

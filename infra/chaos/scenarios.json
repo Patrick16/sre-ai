@@ -1,0 +1,49 @@
+{
+  "_comment": "Game-day scenarios for scripts/game-day.ps1 (Phase 9, docs/18). inject.kind: chaos = a Chaos Mesh file in infra/chaos/, faults = --set-json faults.* on a release. expect.* are regexes (case-insensitive) the run's root cause must match - a crude, honest eval: a human still reads the reports.",
+  "scenarios": [
+    {
+      "name": "pod-kill-orders-api",
+      "hypothesis": "Killing 1 of 3 orders-api pods is invisible to users: the frontend SLI stays under 1%, no agent needed.",
+      "inject": { "kind": "chaos", "file": "pod-kill-orders-api.yaml" },
+      "faultMinutes": 3,
+      "agent": false,
+      "maxSli": 0.01
+    },
+    {
+      "name": "error-rate-orders-api",
+      "hypothesis": "30% of orders-api requests fail with 500. The agent blames orders-api itself (not the database), and a restart does not help because the fault is in the running code/config.",
+      "inject": { "kind": "faults", "release": "orders-api", "values": { "errorRatio": 0.3 } },
+      "faultMinutes": 8,
+      "agent": true,
+      "note": "users report errors on the site",
+      "expect": { "rootCause": ["orders-api", "500|ошиб|error|исключ|exception|InvalidOperation"], "notRootCause": "postgres.*(down|недоступ|0 replica)" }
+    },
+    {
+      "name": "network-delay-postgres",
+      "hypothesis": "+300 ms on postgres answers burns the orders-api latency SLO; the agent names the database (latency), not orders-api, and proposes no restart.",
+      "inject": { "kind": "chaos", "file": "network-delay-postgres.yaml" },
+      "faultMinutes": 8,
+      "agent": true,
+      "note": "users report that the site is slow",
+      "expect": { "rootCause": ["postgres|баз|БД|database", "задерж|latenc|медлен|slow|delay|сет|network"], "noAction": true }
+    },
+    {
+      "name": "memory-leak-orders-api",
+      "hypothesis": "A 60 MB/min leak gets orders-api pods OOMKilled one by one; the agent finds OOMKilled + memory growth. A restart only buys time.",
+      "inject": { "kind": "faults", "release": "orders-api", "values": { "leakMbPerMinute": 60 } },
+      "faultMinutes": 8,
+      "agent": true,
+      "note": "orders-api pods keep restarting",
+      "expect": { "rootCause": ["OOM|памят|memory"] }
+    },
+    {
+      "name": "cpu-stress-orders-api",
+      "hypothesis": "False alarm: CPU stress makes orders-api throttled at its 500m limit, but (measured: 100% throttled periods, 0% slow requests at ~5 rps) users are not affected. The agent should see that the SLIs are fine and propose no action.",
+      "inject": { "kind": "chaos", "file": "cpu-stress-orders-api.yaml" },
+      "faultMinutes": 8,
+      "agent": true,
+      "note": "users report that the site is slow",
+      "expect": { "rootCause": ["CPU|процессор|throttl|троттл|нагруз|не обнаруж|no .*(issue|problem)|в норме|healthy|steady"], "noAction": true }
+    }
+  ]
+}

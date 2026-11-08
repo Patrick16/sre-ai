@@ -3,10 +3,14 @@ replicas: 1
 
 image:
   repository: sandbox/worker
-  tag: "0.3.0"   # 0.3.0: OpenTelemetry metrics on :9090, JSON logs
+  tag: "0.4.0"   # 0.3.0: OpenTelemetry metrics on :9090, JSON logs; 0.4.0: fault modes (Phase 9)
 
 service:
   enabled: false   # nobody calls the worker
+
+# Phase 9: chaos "bad modes", all off. Experiments switch them with --set (scripts/game-day.ps1).
+faults:
+  enabled: true
 
 configEnv:
   Worker__IntervalSeconds: "5"
