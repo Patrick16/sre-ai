@@ -3,6 +3,6 @@ name: sandbox-service
 description: One chart for every sandbox .NET service; each service is its own release with its own values file.
 type: application
 # Chart version: bump when templates change.
-version: 0.6.0
+version: 0.6.1
 # Default image tag when image.tag is not set.
 appVersion: "0.1.0"

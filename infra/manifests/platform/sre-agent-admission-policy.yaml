@@ -1,0 +1,79 @@
+# Layer 5b of the guardrails (docs/06, docs/17): the API server itself narrows what the agent's ServiceAccount may
+# change - independent of the agent's code. RBAC grants "patch deployments", which would also allow scaling or a new
+# image; these policies allow exactly the two actions:
+#   - UPDATE/PATCH of a Deployment that changes ONLY the pod-template annotation kubectl.kubernetes.io/restartedAt
+#     (what `kubectl rollout restart` and restart_deployment send);
+#   - DELETE of a pod that belongs to a ReplicaSet (a Deployment pod) - never postgres-0 (StatefulSet) or a bare pod.
+# ValidatingAdmissionPolicy is GA since Kubernetes 1.30: CEL expressions evaluated in the API server, no webhook.
+# It applies to dry-run requests too - so the agent's DryRun mode is checked by these policies as well.
+# One policy per resource: CEL is type-checked against the resource's schema (spec.replicas exists on a Deployment,
+# not on a Pod), and on DELETE there is no `object`, only `oldObject`.
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: sre-agent-restart-only
+spec:
+  failurePolicy: Fail                       # if the policy can't be evaluated, the request is refused
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [apps]
+        apiVersions: [v1]
+        operations: [UPDATE]                # a PATCH arrives at admission as UPDATE
+        resources: [deployments]
+  matchConditions:
+    # Only the agent's requests; everyone else (Helm, controllers, humans) is untouched.
+    - name: is-sre-agent
+      expression: request.userInfo.username == 'system:serviceaccount:sre-agent:sre-agent'
+  variables:
+    - name: newAnn
+      expression: "has(object.spec.template.metadata.annotations) ? object.spec.template.metadata.annotations : {}"
+    - name: oldAnn
+      expression: "has(oldObject.spec.template.metadata.annotations) ? oldObject.spec.template.metadata.annotations : {}"
+  validations:
+    - expression: "object.spec.replicas == oldObject.spec.replicas"
+      message: "sre-agent may not scale a Deployment (replicas belong to Helm)"
+    - expression: "object.spec.template.spec == oldObject.spec.template.spec"
+      message: "sre-agent may not change the pod spec (image, resources, probes...)"
+    - expression: "object.spec.selector == oldObject.spec.selector && object.spec.strategy == oldObject.spec.strategy"
+      message: "sre-agent may not change the selector or the rollout strategy"
+    - expression: >-
+        variables.newAnn.all(k, k == 'kubectl.kubernetes.io/restartedAt' || (k in variables.oldAnn && variables.oldAnn[k] == variables.newAnn[k])) &&
+        variables.oldAnn.all(k, k == 'kubectl.kubernetes.io/restartedAt' || k in variables.newAnn)
+      message: "sre-agent may only change the pod-template annotation kubectl.kubernetes.io/restartedAt (a rollout restart)"
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: sre-agent-restart-only
+spec:
+  policyName: sre-agent-restart-only
+  validationActions: [Deny]
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: sre-agent-delete-deployment-pods-only
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: [v1]
+        operations: [DELETE]
+        resources: [pods]
+  matchConditions:
+    - name: is-sre-agent
+      expression: request.userInfo.username == 'system:serviceaccount:sre-agent:sre-agent'
+  validations:
+    - expression: >-
+        has(oldObject.metadata.ownerReferences) &&
+        oldObject.metadata.ownerReferences.exists(o, o.kind == 'ReplicaSet' && has(o.controller) && o.controller)
+      message: "sre-agent may only delete pods owned by a ReplicaSet (Deployment pods), never StatefulSet or bare pods"
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: sre-agent-delete-deployment-pods-only
+spec:
+  policyName: sre-agent-delete-deployment-pods-only
+  validationActions: [Deny]

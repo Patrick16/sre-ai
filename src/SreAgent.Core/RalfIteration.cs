@@ -7,7 +7,8 @@ namespace SreAgent.Core;
 /// <summary>
 /// One iteration of the Ralph loop: Retrieve -> Analyze -> Lead -> Feedback.
 /// R and F are deterministic code; A is the model (via Microsoft Agent Framework) with read-only tools;
-/// L is where actions will be proposed in Phase 8 - in Phase 7 the agent only observes.
+/// L hands the model's proposal (if any) to <see cref="ActionLead"/>: guardrails decide, the model never acts itself.
+/// Without an ActionLead (no actions configured) the agent only observes, as in Phase 7.
 /// </summary>
 public sealed class RalfIteration(
     IObservationCollector collector,
@@ -15,9 +16,11 @@ public sealed class RalfIteration(
     IAgentToolset toolset,
     IAuditLog audit,
     ILoggerFactory loggerFactory,
-    TimeProvider time)
+    TimeProvider time,
+    ActionLead? lead = null)
 {
-    public const string ObserveOnlyLead = "observe-only: Phase 7 proposes and executes no actions";
+    public const string ObserveOnlyLead = "observe-only: no actions are configured";
+    public const string NoProposal = "no action proposed";
 
     public async Task<IterationResult> RunAsync(TaskSpec task, RunState state, int number, string? model, CancellationToken ct)
     {
@@ -51,7 +54,7 @@ public sealed class RalfIteration(
             UseProvidedChatClientAsIs = true, // our pipeline above already does function invocation, with our limits
             ChatOptions = new ChatOptions
             {
-                Instructions = Prompts.System(task),
+                Instructions = Prompts.System(task, lead?.Settings),
                 Tools = tools,
                 Temperature = 0.1f,
             },
@@ -84,8 +87,19 @@ public sealed class RalfIteration(
             outputTokens = outTokens,
         }), ct);
 
-        // L - Lead: nothing to propose yet. F - Feedback (completion check, RunState) is done by the Ralph loop.
+        // L - Lead: the proposal goes through the guardrails (and, if executed, its effect is measured - part of F).
+        // The rest of F (completion check, RunState) is done by the Ralph loop.
+        ActionRecord? action = null;
+        var leadText = lead is null ? ObserveOnlyLead : NoProposal;
+        if (lead is not null && analysis.Action is { } proposal)
+        {
+            action = await lead.HandleAsync(proposal, task, state, number, ct);
+            leadText = $"{proposal.Type} {proposal.Target}: {action.Status} ({action.Mode})" +
+                       (action.Executed ? $", effect {action.Effect}" : "") + $" - {action.Detail}";
+        }
+
         return new IterationResult(number, started, time.GetElapsedTime(startedTs), modelId, observations, analysis,
-            calls, ObserveOnlyLead, new CompletionStatus(false, "not checked yet"), inTokens, outTokens);
+            calls, leadText, new CompletionStatus(false, "not checked yet"), inTokens, outTokens)
+        { Action = action };
     }
 }

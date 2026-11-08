@@ -12,7 +12,7 @@ public static class ServiceCollectionExtensions
     {
         services.Configure<ToolsOptions>(configuration.GetSection(ToolsOptions.Section));
 
-        // In the cluster: the pod's ServiceAccount token (read-only RBAC). Locally: ~/.kube/config (context kind-sre-ai).
+        // In the cluster: the pod's ServiceAccount token (RBAC: read + the two actions). Locally: ~/.kube/config (context kind-sre-ai).
         services.AddSingleton<IKubernetes>(_ => new Kubernetes(KubernetesClientConfiguration.IsInCluster()
             ? KubernetesClientConfiguration.InClusterConfig()
             : KubernetesClientConfiguration.BuildConfigFromConfigFile()));
@@ -24,6 +24,11 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IAgentToolset, AgentTools>();
         services.AddSingleton<IObservationCollector, ObservationCollector>();
         services.AddSingleton<ICompletionCheck, AlertsResolvedCompletionCheck>();
+
+        // Phase 8: the only writers. Whether they are used at all is decided by the host's Actions settings.
+        services.AddSingleton<IActionExecutor, KubernetesActionExecutor>();
+        services.AddSingleton<IKillSwitch, ConfigMapKillSwitch>();
+        services.AddSingleton<IHealthProbe, PrometheusHealthProbe>();
         return services;
     }
 

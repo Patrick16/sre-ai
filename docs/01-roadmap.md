@@ -111,13 +111,15 @@
 
 **Понять:** как дать агенту права, не дав ему сломать кластер.
 
-- [ ] Отдельный ServiceAccount + RBAC Role только с нужными verbs
-- [ ] Allowlist действий (restart, scale в пределах, rollback) + policy-проверки
-- [ ] Режимы: `dry-run` (по умолчанию) → `approve` (подтверждение человеком) → `auto`
-- [ ] Audit log каждого решения и действия
-- [ ] Лимиты: не больше N действий за окно, circuit breaker, cooldown
-- [ ] Проверка эффекта: после действия агент перепроверяет, стало ли лучше
-- [ ] Ralph loop с действиями: «чинить, пока не починено», запрет повтора бесполезного действия, эскалация при degraded/нет прогресса
+- [x] Действия `restart_deployment` (Auto) и `delete_pod` (Approve); модель только предлагает их полем в JSON — см. [17](17-phase-8-actions-guardrails.md)
+- [x] Guardrails в коде: allowlist, проверка цели, kill switch (ConfigMap), лимиты за прогон и за окно, cooldown, circuit breaker, no-repeat, preconditions
+- [x] Режимы `DryRun` (по умолчанию; `dryRun=All` в API) → `Approve` (`POST /approvals/{id}`, таймаут = «нет») → `Auto`
+- [x] RBAC (patch deployments, delete pods, get одного ConfigMap) + ValidatingAdmissionPolicy (только аннотация рестарта, только поды Deployment); проверено `--as`
+- [x] Audit каждого шага до и после; раздел «Действия» в отчёте строится из записи, не из текста модели
+- [x] Проверка эффекта (1m 5xx + неготовые поды, до/после) → Improved / Unchanged / Degraded; Degraded → `Escalated`
+- [x] Ralph loop с действиями: RunState помнит действия, повтор бесполезного запрещён; current-symptom (по итогам e2e); 53 теста harness
+- [x] Сквозной сценарий в Auto: без действий, пока база лежит; после — рестарт orders-api; найдены «устаревшие данные» и «post hoc» в оценке эффекта
+- [ ] Упражнения из [17](17-phase-8-actions-guardrails.md): kill switch, protected, prompt injection, ухудшающее действие
 
 ## Фаза 9. Chaos engineering
 

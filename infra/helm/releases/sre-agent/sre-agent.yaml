@@ -1,17 +1,32 @@
 # helm upgrade --install sre-agent infra/helm/sandbox-service -n sre-agent -f infra/helm/releases/sre-agent/sre-agent.yaml
-# Phase 7: the observe-only agent (Ralph loop + RALF iterations, Microsoft Agent Framework, local LLM in LM Studio).
+# Phase 7: the agent (Ralph loop + RALF iterations, Microsoft Agent Framework, local LLM in LM Studio).
+# Phase 8: may run two allowlisted actions through the guardrails (docs/06, docs/17).
 replicas: 1
 
 image:
   repository: sre-agent/host
-  tag: "0.3.1"   # 0.2.x: observe-only; 0.3.0: facts in RunState + final synthesis; 0.3.1: per-iteration fact cap, "scaled to zero" hint
+  tag: "0.4.1"   # 0.2.x: observe-only; 0.3.x: facts + final synthesis; 0.4.0: actions + guardrails; 0.4.1: current-symptom check
 
-# The agent reads the Kubernetes API, so it needs a token - with read-only rights in sandbox and nothing else.
+# The agent talks to the Kubernetes API, so it needs a token. Rights = read in sandbox + exactly what the two actions
+# need. RBAC can't say "only this annotation" - patch on deployments would also allow scaling - so the admission
+# policy infra/manifests/platform/sre-agent-admission-policy.yaml narrows it down to the restart annotation.
 serviceAccount:
   automountToken: true
 rbac:
   namespaceRules:
+    sre-agent:
+      # The kill switch: its mere existence stops all actions. Only this one name, only get.
+      - apiGroups: [""]
+        resources: [configmaps]
+        resourceNames: [sre-agent-kill-switch]
+        verbs: [get]
     sandbox:
+      - apiGroups: [apps]
+        resources: [deployments]
+        verbs: [patch]                  # restart_deployment
+      - apiGroups: [""]
+        resources: [pods]
+        verbs: [delete]                 # delete_pod
       - apiGroups: [""]
         resources: [pods, events, services, endpoints, persistentvolumeclaims]
         verbs: [get, list, watch]
@@ -42,6 +57,16 @@ configEnv:
   Llm__AllowedModels__1: "qwythos-9b-claude-mythos-5-1m"
   Llm__AllowedModels__2: "gemma4-26b-a4b-uncensored-hauhaucs-balanced"
   Tools__Namespaces__0: "sandbox"
+  # Phase 8. Global ceiling DryRun: nothing changes until a human raises it (e.g. --set configEnv.Actions__Mode=Approve).
+  # Effective mode = the stricter of the ceiling and the action's own mode.
+  Actions__Mode: "DryRun"
+  Actions__Allowed__restart_deployment: "Auto"
+  Actions__Allowed__delete_pod: "Approve"
+  Actions__MaxPerRun: "2"
+  Actions__MaxPerWindow: "3"           # across all runs, per 30 min
+  Actions__CooldownMinutes: "10"        # same action on the same target
+  Actions__ApprovalTimeoutMinutes: "5"
+  Actions__VerifyDelaySeconds: "90"
 
 networkPolicy:
   allowFromNamespaces: [monitoring]                 # Alertmanager's webhook

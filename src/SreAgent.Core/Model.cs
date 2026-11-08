@@ -41,6 +41,9 @@ public sealed record Analysis(
 {
     /// <summary>Facts the model verified in this iteration, each with its evidence. Carried over in RunState.</summary>
     public IReadOnlyList<string> Facts { get; init; } = [];
+
+    /// <summary>At most one action the model proposes; guardrails decide whether anything happens.</summary>
+    public ActionProposal? Action { get; init; }
 }
 
 /// <summary>
@@ -72,9 +75,13 @@ public sealed record IterationResult(
     string Lead,
     CompletionStatus Completion,
     long InputTokens,
-    long OutputTokens);
+    long OutputTokens)
+{
+    public ActionRecord? Action { get; init; }
+}
 
-public enum RunOutcome { Resolved, LimitsExhausted, Failed, Cancelled }
+/// <summary>Escalated: the agent stopped on purpose (its action made things worse) - a human must take over.</summary>
+public enum RunOutcome { Resolved, LimitsExhausted, Escalated, Failed, Cancelled }
 
 public sealed class AgentRun(TaskSpec task, DateTimeOffset startedAt)
 {
@@ -85,6 +92,7 @@ public sealed class AgentRun(TaskSpec task, DateTimeOffset startedAt)
     public string OutcomeReason { get; set; } = "";
     public List<IterationResult> Iterations { get; } = [];
     public IReadOnlyList<string> Facts { get; set; } = [];
+    public IReadOnlyList<ActionRecord> Actions => Iterations.Where(i => i.Action is not null).Select(i => i.Action!).ToList();
     public RunSynthesis? Synthesis { get; set; }
     public string? ReportPath { get; set; }
 }

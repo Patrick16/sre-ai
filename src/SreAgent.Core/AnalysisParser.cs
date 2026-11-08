@@ -33,7 +33,7 @@ public static partial class AnalysisParser
                         List(root, "next_checks"),
                         Parsed: true,
                         RawText: text)
-                    { Facts = List(root, "facts") };
+                    { Facts = List(root, "facts"), Action = Action(root) };
                 }
             }
             catch (JsonException)
@@ -72,6 +72,17 @@ public static partial class AnalysisParser
         {
             return null;
         }
+    }
+
+    // "action": null | {"type": "...", "target": "...", "reason": "..."}. Missing type/target = no proposal. The values
+    // are NOT trusted here - that is the guardrails' job; the parser only extracts them.
+    private static ActionProposal? Action(JsonElement root)
+    {
+        if (!root.TryGetProperty("action", out var a) || a.ValueKind != JsonValueKind.Object) return null;
+        var type = Str(a, "type");
+        var target = Str(a, "target");
+        if (type.Length == 0 || target.Length == 0 || type.Equals("none", StringComparison.OrdinalIgnoreCase)) return null;
+        return new ActionProposal(type, target, Str(a, "reason"));
     }
 
     private static string Str(JsonElement root, string name) =>

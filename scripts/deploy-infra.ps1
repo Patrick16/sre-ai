@@ -19,6 +19,8 @@ function Invoke-Checked([scriptblock]$Command, [string]$What) {
 Invoke-Checked { kubectl apply -f (Join-Path $platform 'namespace-sandbox.yaml') -f (Join-Path $platform 'namespace-monitoring.yaml') } 'namespaces'
 # Default-deny + DNS for the app namespaces; each app chart adds its own allow rules.
 Invoke-Checked { kubectl apply -f (Join-Path $platform 'networkpolicy-baseline.yaml') } 'network policy baseline'
+# Phase 8: the API server limits what the agent's ServiceAccount may change (only restarts and Deployment-pod deletes).
+Invoke-Checked { kubectl apply -f (Join-Path $platform 'sre-agent-admission-policy.yaml') } 'sre-agent admission policy'
 
 # Grafana admin password: generated once, never in git.
 if (-not (kubectl get secret grafana-admin -n monitoring --ignore-not-found -o name)) {

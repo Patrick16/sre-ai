@@ -7,7 +7,7 @@ namespace SreAgent.Host;
 /// <summary>
 /// Human-readable report of one run (docs/08). Deterministic sections (trigger, iterations, tool calls, timeline)
 /// come from the recorded run; only Summary/Analysis/Recommendations come from the model - so a report cannot
-/// claim actions or checks that never happened.
+/// claim actions or checks that never happened. The Actions section is written from the guardrails' records.
 /// </summary>
 public sealed partial class MarkdownReportWriter(string directory)
 {
@@ -26,7 +26,10 @@ public sealed partial class MarkdownReportWriter(string directory)
         sb.AppendLine($"- Outcome: **{run.Outcome}** — {run.OutcomeReason}");
         sb.AppendLine($"- Ralph loop iterations: {run.Iterations.Count} of {run.Task.Limits.MaxIterations}, duration {duration:hh\\:mm\\:ss}");
         sb.AppendLine($"- Model: {last?.Model ?? "-"}, tokens in/out: {run.Iterations.Sum(i => i.InputTokens)}/{run.Iterations.Sum(i => i.OutputTokens)}, tool calls: {run.Iterations.Sum(i => i.ToolCalls.Count)}");
-        sb.AppendLine($"- Actions: {RalfIteration.ObserveOnlyLead}");
+        var actions = run.Actions;
+        sb.AppendLine(actions.Count == 0
+            ? $"- Actions: none ({run.Iterations.LastOrDefault()?.Lead ?? "-"})"
+            : $"- Actions: {actions.Count} proposed, {actions.Count(a => a.Executed)} executed ({string.Join(", ", actions.Select(a => $"{a.Proposal.Type} {a.Proposal.Target} → {a.Status}{(a.Executed ? $"/{a.Effect}" : "")}"))})");
         sb.AppendLine();
 
         if (run.Synthesis is { } s)
@@ -79,6 +82,22 @@ public sealed partial class MarkdownReportWriter(string directory)
             sb.AppendLine();
         }
 
+        if (actions.Count > 0)
+        {
+            // Deterministic: straight from what the guardrails and the executor recorded, never from the model's text.
+            sb.AppendLine("## Действия (решения guardrails, из записи прогона)");
+            foreach (var a in actions)
+            {
+                sb.AppendLine($"### Итерация {a.Iteration}: `{a.Proposal.Type} {a.Proposal.Target}` — **{a.Status}** (режим {a.Mode})");
+                sb.AppendLine($"- Обоснование модели: {a.Proposal.Reason}");
+                sb.AppendLine($"- Итог: {a.Detail}");
+                if (a.ApprovedBy is not null) sb.AppendLine($"- Подтвердил: {a.ApprovedBy}");
+                if (a.Executed) sb.AppendLine($"- Эффект: **{a.Effect}** — до: {a.Before}; после: {a.After}");
+                sb.AppendLine($"- Проверки: {string.Join("; ", a.Checks.Select(c => $"{(c.Passed ? "✅" : "❌")} {c.Name}: {c.Detail}"))}");
+                sb.AppendLine();
+            }
+        }
+
         if (run.Facts.Count > 0)
         {
             sb.AppendLine("## Установленные факты (проверены в ходе прогона)");
@@ -87,10 +106,10 @@ public sealed partial class MarkdownReportWriter(string directory)
         }
 
         sb.AppendLine("## Итерации");
-        sb.AppendLine("| # | Время | Длительность | Гипотеза | Уверенность | Tools | Completion check |");
-        sb.AppendLine("|---|---|---|---|---|---|---|");
+        sb.AppendLine("| # | Время | Длительность | Гипотеза | Уверенность | Tools | Lead | Completion check |");
+        sb.AppendLine("|---|---|---|---|---|---|---|---|");
         foreach (var it in run.Iterations)
-            sb.AppendLine($"| {it.Number} | {it.StartedAt:HH:mm:ss}Z | {it.Duration.TotalSeconds:0}s | {Cell(it.Analysis.Hypothesis)} | {it.Analysis.Confidence} | {it.ToolCalls.Count} | {(it.Completion.Done ? "✅" : "⏳")} {Cell(it.Completion.Reason)} |");
+            sb.AppendLine($"| {it.Number} | {it.StartedAt:HH:mm:ss}Z | {it.Duration.TotalSeconds:0}s | {Cell(it.Analysis.Hypothesis)} | {it.Analysis.Confidence} | {it.ToolCalls.Count} | {Cell(it.Action is { } act ? $"{act.Proposal.Type} {act.Proposal.Target}: {act.Status}{(act.Executed ? $"/{act.Effect}" : "")}" : "—")} | {(it.Completion.Done ? "✅" : "⏳")} {Cell(it.Completion.Reason)} |");
         sb.AppendLine();
 
         sb.AppendLine("## Вызовы tools");

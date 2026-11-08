@@ -136,7 +136,7 @@ public static class Goals
         $"Alerts are firing in namespace \"{ns}\": {string.Join(", ", alerts.Select(a => a.Name).Distinct())}. " +
         "Find the most likely root cause (not just the symptom), track whether the namespace returns to steady state " +
         "(the alerts resolved and every service's share of bad requests back under 1%), and recommend what a human should do. " +
-        "You can only observe.";
+        "If an available action would clearly help, propose it; the guardrails decide whether it runs.";
 
     public static string HealthCheck(string ns) =>
         $"Routine health check of namespace \"{ns}\". Summarize its state, point out anything abnormal or risky " +

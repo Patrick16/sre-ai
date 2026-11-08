@@ -6,7 +6,7 @@ namespace SreAgent.Host;
 /// <summary>Append-only JSON Lines, one file per day: {DataDir}/audit/2026-11-08.jsonl (docs/08).</summary>
 public sealed class FileAuditLog(string directory) : IAuditLog
 {
-    private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web) { Converters = { new System.Text.Json.Serialization.JsonStringEnumConverter() } };
     private readonly SemaphoreSlim _lock = new(1, 1);
 
     public async Task WriteAsync(AuditEvent auditEvent, CancellationToken ct)

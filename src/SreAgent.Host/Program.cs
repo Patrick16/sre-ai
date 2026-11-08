@@ -7,8 +7,9 @@ using SreAgent.Host;
 using SreAgent.LlmClients;
 using SreAgent.Tools;
 
-// The SRE agent (Phase 7: observe-only).
+// The SRE agent.
 //   Alertmanager webhook / schedule / POST /runs  ->  RunQueue  ->  AgentWorker  ->  RalphLoop (RALF iterations)  ->  report
+// Phase 8: the Lead step may run ONE allowlisted action per iteration, through the guardrails (docs/06).
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.Configure<AgentOptions>(builder.Configuration.GetSection(AgentOptions.Section));
@@ -23,6 +24,19 @@ builder.Services.AddSingleton<IChatClientFactory>(sp => sp.GetRequiredService<Op
 builder.Services.AddSingleton<IAuditLog>(sp => new FileAuditLog(Path.Combine(sp.GetRequiredService<IOptions<AgentOptions>>().Value.DataDir, "audit")));
 builder.Services.AddSingleton<IRunStateStore>(sp => new FileRunStateStore(Path.Combine(sp.GetRequiredService<IOptions<AgentOptions>>().Value.DataDir, "state")));
 builder.Services.AddSingleton(sp => new MarkdownReportWriter(Path.Combine(sp.GetRequiredService<IOptions<AgentOptions>>().Value.DataDir, "reports")));
+
+// Actions: only when at least one type is allowlisted; otherwise ActionLead isn't registered and the agent observes.
+var actions = builder.Configuration.GetSection(ActionsOptions.Section).Get<ActionsOptions>() ?? new ActionsOptions();
+builder.Services.AddSingleton<ApprovalGate>();
+builder.Services.AddSingleton<IApprovalGate>(sp => sp.GetRequiredService<ApprovalGate>());
+if (actions.Allowed.Count > 0)
+{
+    builder.Services.AddSingleton(actions.ToSettings());
+    builder.Services.AddSingleton<IActionLedger>(sp => new FileActionLedger(
+        Path.Combine(sp.GetRequiredService<IOptions<AgentOptions>>().Value.DataDir, "actions-ledger.json"), sp.GetRequiredService<TimeProvider>()));
+    builder.Services.AddSingleton<Guardrails>();
+    builder.Services.AddSingleton<ActionLead>();
+}
 builder.Services.AddSingleton<RalfIteration>();
 builder.Services.AddSingleton<RunSynthesizer>();
 builder.Services.AddSingleton<RalphLoop>();
@@ -92,9 +106,24 @@ app.MapGet("/runs/{id}/report", (string id, RunQueue queue) =>
 app.MapGet("/models", (OpenAiCompatibleChatClientFactory llm, IOptions<LlmOptions> o) => new { @default = o.Value.Model, allowed = llm.Models });
 app.MapGet("/alerts", (AlertInbox inbox) => inbox.Latest());
 
+// Approve mode: what waits for a human, and the decision.
+app.MapGet("/actions", (IServiceProvider sp) => sp.GetService<ActionSettings>() is { } s
+    ? Results.Ok(new { s.Enabled, mode = s.Mode.ToString(), allowed = s.Allowed.ToDictionary(kv => kv.Key, kv => s.EffectiveMode(kv.Key).ToString()), s.MaxPerRun, s.MaxPerWindow, window = s.Window.ToString(), cooldown = s.Cooldown.ToString() })
+    : Results.Ok(new { enabled = false, reason = "no action is allowlisted (Actions__Allowed__*): observe-only" }));
+app.MapGet("/approvals", (ApprovalGate gate) => gate.Pending());
+app.MapPost("/approvals/{id}", (string id, ApprovalBody body, ApprovalGate gate, ILogger<ApprovalGate> logger) =>
+{
+    if (string.IsNullOrWhiteSpace(body.By)) return Results.BadRequest(new { error = "\"by\" (who decides) is required - it goes to the audit log" });
+    if (!gate.Decide(id, body.Approve, body.By)) return Results.NotFound(new { error = $"no pending approval '{id}' (expired or decided)" });
+    logger.LogWarning("Approval {Id}: {Decision} by {By}", id, body.Approve ? "approved" : "rejected", body.By);
+    return Results.Ok(new { id, approved = body.Approve, body.By });
+});
+
 app.Run();
 
 record ManualRun(string? Goal, string? Model);
+
+record ApprovalBody(bool Approve, string? By);
 
 // https://prometheus.io/docs/alerting/latest/configuration/#webhook_config
 record AlertmanagerWebhook(string Status, string Receiver, List<AlertmanagerAlert> Alerts);

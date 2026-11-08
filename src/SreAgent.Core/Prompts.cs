@@ -4,9 +4,10 @@ namespace SreAgent.Core;
 
 public static class Prompts
 {
-    public static string System(TaskSpec task) => $$"""
+    public static string System(TaskSpec task, ActionSettings? actions = null) => $$"""
         You are an SRE assistant investigating a Kubernetes sandbox (namespace "{{task.Namespace}}").
-        You can only OBSERVE: you have read-only tools and you must never claim to have changed anything.
+        Your tools are read-only and you must never claim to have changed anything yourself.
+        {{ActionsSection(actions)}}
 
         How to work:
         - Start from the observations you are given; call tools only to confirm or refute a hypothesis.
@@ -26,8 +27,30 @@ public static class Prompts
          "evidence": ["fact that supports it", "..."],
          "facts": ["something you VERIFIED in this iteration, with its source (event, metric value, pod state, log line)", "..."],
          "recommendations": ["what a human should do", "..."],
-         "next_checks": ["what to look at in the next iteration", "..."]}
+         "next_checks": ["what to look at in the next iteration", "..."]{{ActionFieldAndClose(actions)}}
         """;
+
+    // The closing brace of the JSON template is emitted here: "}}}" in a $$ raw string would be ambiguous.
+    private static string ActionFieldAndClose(ActionSettings? actions) => actions is { Enabled: true, Allowed.Count: > 0 }
+        ? ",\n \"action\": null or {\"type\": \"one of the action types\", \"target\": \"one object name\", \"reason\": \"evidence that it will help\"}}"
+        : "}";
+
+    private static string ActionsSection(ActionSettings? actions)
+    {
+        if (actions is not { Enabled: true, Allowed.Count: > 0 })
+            return "You can only OBSERVE: no actions exist in this deployment; recommend what a human should do.";
+        var sb = new StringBuilder();
+        sb.AppendLine("You may PROPOSE at most one remediation action per iteration in the \"action\" field. Code - not you - decides");
+        sb.AppendLine("whether it runs: guardrails (limits, cooldowns, preconditions) and the mode below. Available actions:");
+        foreach (var (type, _) in actions.Allowed)
+            if (ActionCatalog.Descriptions.TryGetValue(type, out var description))
+                sb.AppendLine($"- {type} (mode {actions.EffectiveMode(type)}): {description}");
+        sb.AppendLine("Modes: DryRun = only validated and reported, Approve = a human must confirm, Auto = executed and its effect measured.");
+        sb.AppendLine("Propose an action ONLY when the evidence shows it would fix the cause or a clear symptom; otherwise \"action\": null.");
+        sb.AppendLine("A restart does not fix a dependency that is down or a configuration change - recommend those to a human instead.");
+        sb.Append("Never propose again an action that earlier iterations show as refused, rejected or without improvement.");
+        return sb.ToString();
+    }
 
     public static string SynthesisSystem(TaskSpec task) => $$"""
         You are writing the conclusion of an SRE investigation of namespace "{{task.Namespace}}".
@@ -37,7 +60,8 @@ public static class Prompts
         the cause. Determine the root cause from what was observed WHILE the incident was active.
         Prefer conclusions backed by concrete evidence (events, workload state, metric values) over plausible stories.
         If iterations contradict each other, say which version the evidence supports and why.
-        You did not and cannot change anything in the cluster - never claim actions.
+        Actions: the record lists every action the agent proposed and what code did with it (refused, dry run,
+        executed with a measured effect). Describe them exactly as recorded - never claim more than that.
 
         Answer with ONLY one JSON object, no markdown, written in {{task.Language}}:
         {"summary": "2-3 sentences for a human: what happened, how it ended",
@@ -60,6 +84,9 @@ public static class Prompts
             sb.AppendLine($"## Iteration {it.Number} at {it.StartedAt:HH:mm:ss}Z");
             sb.AppendLine($"hypothesis: {it.Analysis.Hypothesis} (confidence {it.Analysis.Confidence})");
             foreach (var e in it.Analysis.Evidence) sb.AppendLine($"- evidence: {e}");
+            if (it.Action is { } a)
+                sb.AppendLine($"action: {a.Proposal.Type} {a.Proposal.Target} -> {a.Status} ({a.Mode})" +
+                              (a.Executed ? $", effect {a.Effect}, before: {a.Before}, after: {a.After}" : "") + $"; {a.Detail}");
             sb.AppendLine($"completion check: {(it.Completion.Done ? "done" : "not done")} - {it.Completion.Reason}");
         }
         if (run.Facts.Count > 0)

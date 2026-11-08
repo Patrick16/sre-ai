@@ -31,22 +31,18 @@ LLM ──► ActionProposal ──► [1 Allowlist] ──► [2 Policy] ──
 Модель не передаёт «команду» — только `{type: "restart", target: "deployment/orders-api"}`.
 
 ```yaml
-# пример конфигурации (финальный формат — в фазе 8)
-actions:
-  restart:
-    namespaces: [sandbox]
-    kinds: [Deployment]
-    mode: auto
-  scale:
-    namespaces: [sandbox]
-    kinds: [Deployment]
-    minReplicas: 1
-    maxReplicas: 5
-    mode: approve
-  rollback:
-    namespaces: [sandbox]
-    mode: approve
+# реализовано в Фазе 8 (env агента в infra/helm/releases/sre-agent/sre-agent.yaml), подробности — docs/17
+Actions__Mode: "DryRun"                         # глобальный потолок: DryRun | Approve | Auto
+Actions__Allowed__restart_deployment: "Auto"    # действие → его собственный режим; действует строжайший
+Actions__Allowed__delete_pod: "Approve"
+Actions__MaxPerRun: "2"
+Actions__MaxPerWindow: "3"                      # за 30 мин, по всем прогонам
+Actions__CooldownMinutes: "10"
 ```
+
+Из таблицы выше реализованы только `restart_deployment` и `delete_pod`. `scale` и `rollback` сознательно не сделаны:
+`replicas` и шаблон пода принадлежат Helm, и второй «писатель» этих полей конфликтует со следующим `helm upgrade`
+(см. [17](17-phase-8-actions-guardrails.md)).
 
 ### 2. Policy-проверки (pre-conditions)
 Детерминированные правила, учитывающие текущее состояние:
@@ -58,7 +54,8 @@ actions:
 ### 3. Rate limiting и circuit breaker
 - не более N действий за окно (например, 3 за 30 минут на весь кластер);
 - если два действия подряд не помогли — агент **прекращает** действовать и эскалирует;
-- kill switch: флаг в ConfigMap `agent.actionsEnabled=false` мгновенно отключает все действия.
+- kill switch: **существование** ConfigMap `sre-agent-kill-switch` в namespace `sre-agent` мгновенно отключает все
+  действия (не прочитался — тоже отключены: fail closed).
 
 ### 4. Режим выполнения
 - **dry-run** (по умолчанию): действие только описывается в отчёте («я бы сделал X, потому что Y»).
@@ -73,6 +70,10 @@ actions:
 - Role в `sandbox`: `patch` на `deployments` (rollout restart и scale делаются через patch),
   `delete` на `pods`, `get/list` на `replicasets` (для rollback);
 - ничего больше. Проверка: `kubectl auth can-i --list --as=system:serviceaccount:sre-agent:sre-agent -n sandbox`.
+
+RBAC не умеет «patch, но только эту аннотацию»: `patch deployments` разрешает и scale, и смену образа. Поэтому в
+Фазе 8 добавлен слой **5b — ValidatingAdmissionPolicy**: API-сервер пропускает от агента только изменение аннотации
+рестарта и удаление подов, принадлежащих ReplicaSet.
 
 ### 6. Audit log
 Каждое предложение записывается **до** выполнения и обновляется после: кто/что предложил,

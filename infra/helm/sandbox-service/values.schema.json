@@ -85,7 +85,8 @@
               "properties": {
                 "apiGroups": { "type": "array", "items": { "type": "string" } },
                 "resources": { "type": "array", "items": { "type": "string", "not": { "enum": ["secrets", "*"] } } },
-                "verbs": { "type": "array", "items": { "type": "string", "not": { "const": "*" } } }
+                "verbs": { "type": "array", "items": { "type": "string", "not": { "const": "*" } } },
+                "resourceNames": { "type": "array", "items": { "type": "string" } }
               }
             }
           }

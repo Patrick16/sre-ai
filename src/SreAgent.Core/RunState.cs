@@ -24,8 +24,13 @@ public sealed class RunState
     /// </summary>
     public List<FactEntry> Facts { get; init; } = [];
 
+    /// <summary>Every proposed action and what became of it: the guardrails' memory (limits, no-repeat, circuit breaker).</summary>
+    public List<ActionRecord> Actions { get; init; } = [];
+
     public void Append(IterationResult result)
     {
+        if (result.Action is { } action) Actions.Add(action);
+
         History.Add(new RunStateEntry(
             result.Number,
             result.StartedAt,
@@ -54,6 +59,14 @@ public sealed class RunState
             foreach (var f in Facts) sb.AppendLine($"- [iteration {f.Iteration}, {f.At:HH:mm:ss}Z] {f.Text}");
             sb.AppendLine();
         }
+        if (Actions.Count > 0)
+        {
+            sb.AppendLine("Actions proposed earlier in this run (do not propose again what was refused or did not help):");
+            foreach (var a in Actions)
+                sb.AppendLine($"- iteration {a.Iteration}: {a.Proposal.Type} {a.Proposal.Target} -> {a.Status}" +
+                              (a.Executed ? $", effect {a.Effect} (before: {a.Before}; after: {a.After})" : "") + $": {a.Detail}");
+            sb.AppendLine();
+        }
         sb.AppendLine("Earlier hypotheses (opinions - confirm or refute them with evidence):");
         foreach (var e in History.TakeLast(maxEntries))
         {
@@ -77,7 +90,7 @@ public sealed record RunStateEntry(
 
 public sealed class FileRunStateStore(string directory) : IRunStateStore
 {
-    private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web) { WriteIndented = true };
+    private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web) { WriteIndented = true, Converters = { new System.Text.Json.Serialization.JsonStringEnumConverter() } };
 
     public async Task<RunState?> LoadAsync(string runId, CancellationToken ct)
     {

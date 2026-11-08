@@ -67,6 +67,13 @@ public sealed class RalphLoop(
                     Finish(run, RunOutcome.Resolved, status.Reason);
                     break;
                 }
+                if (result.Action is { Effect: ActionEffect.Degraded } bad)
+                {
+                    // The agent made things worse: no further action, no further attempts - a human takes over.
+                    Finish(run, RunOutcome.Escalated,
+                        $"action {bad.Proposal.Type} {bad.Proposal.Target} made things worse (before: {bad.Before}; after: {bad.After}) - stopped, a human must take over");
+                    break;
+                }
                 if (consecutiveFailures >= task.Limits.MaxConsecutiveFailures)
                 {
                     Finish(run, RunOutcome.Failed, $"{consecutiveFailures} iterations in a row failed; last error: {result.Analysis.Summary}");
