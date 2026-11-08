@@ -16,8 +16,7 @@ Retrieve → Analyze → Lead → Feedback, см. [docs/05-agent-architecture.md
 | [`docs/`](docs/00-overview.md) | Документация: обзор, роадмап, объяснение концепций k8s/SRE, дизайн агента, guardrails, хаос-инжениринг, отчётность, глоссарий |
 | `infra/` | Всё для кластера: bootstrap кластера (`cluster/`), Helm-чарты (`helm/`), «сырые» k8s-манифесты (`manifests/`), конфигурация хаос-экспериментов (`chaos/`) |
 | `src/` | .NET-решение: ядро агента, инструменты (tools), клиенты LLM, песочничные сервисы |
-| `scripts/` | Скрипты bootstrap: поднять кластер, установить чарты, сгенерировать нагрузку/сбои |
-| `reports/` | Отчёты, которые генерирует агент по итогам своих циклов/инцидентов |
+| `scripts/` | Подъём (`up.ps1`), проверка (`smoke-test.ps1`), деплой, game day, восстановление mesh |
 
 ## С чего начать
 
@@ -27,27 +26,28 @@ Retrieve → Analyze → Lead → Feedback, см. [docs/05-agent-architecture.md
    привязаны к фазам из роадмапа.
 3. [docs/glossary.md](docs/glossary.md) — если встретился незнакомый термин.
 
-## Технологии (план)
+## Технологии
 
-- **Kubernetes**: локальный кластер (kind/minikube), Deployments, Services,
-  Ingress, ConfigMaps, Secrets, PV/PVC, Helm, NetworkPolicy, mTLS, Service Mesh.
-- **Observability**: Prometheus, Grafana, Alertmanager, Loki (или аналог для логов).
-- **Agent**: .NET (C#), подключение к LLM через OpenAI-совместимый API или
-  локально через LM Studio.
-- **Chaos engineering**: Chaos Mesh и/или собственные простые инструменты на .NET.
-- **Sandbox-сервисы**: минимальные .NET-приложения, имитирующие "прод"-топологию
-  (frontend → backend → worker + БД), намеренно хрупкие для экспериментов.
+- **Kubernetes**: kind (3 ноды), Deployments, StatefulSet, Services, Ingress (Traefik), ConfigMaps, Secrets,
+  PV/PVC, Helm 4, Pod Security, NetworkPolicy default-deny, mTLS и service mesh (Linkerd), ValidatingAdmissionPolicy.
+- **Observability**: Prometheus, Grafana, Alertmanager (kube-prometheus-stack), Loki + Alloy, OpenTelemetry
+  в .NET-сервисах, SLO с multi-window burn-rate алертами.
+- **Agent**: .NET 10 на Microsoft Agent Framework, локальная модель `qwen/qwen3.5-9b` в LM Studio (или любой
+  OpenAI-совместимый API). Ralph loop + RALF, факты и синтез, два действия под guardrails.
+- **Chaos engineering**: Chaos Mesh, свой `Chaos.Monkey` на .NET, «плохие режимы» в сервисах, game day со scorecard.
+- **Sandbox-сервисы**: frontend → orders-api → PostgreSQL, worker; намеренно простые.
 
-## Статус
+## Быстрый старт
 
-**Пройдены Фазы 0–3**: инструменты, .NET solution, kind-кластер
-([docs/09](docs/09-dev-environment.md)), три sandbox-сервиса ([docs/10](docs/10-phase-1-kubernetes-basics.md)),
-Traefik + cert-manager и HTTPS на `https://sandbox.localhost` ([docs/11](docs/11-phase-2-ingress-tls.md)),
-свой Helm-чарт и релиз на каждый сервис ([docs/12](docs/12-phase-3-helm.md)), PostgreSQL на StatefulSet
-с постоянным томом ([docs/13](docs/13-phase-4-storage.md)), мониторинг, логи, SLO и алерты с доставкой
-в заглушку агента ([docs/14](docs/14-phase-5-observability.md)), default-deny NetworkPolicy и service mesh
-Linkerd с mTLS ([docs/15](docs/15-phase-6-network-security.md)), SRE-агент в режиме наблюдения на Microsoft Agent
-Framework с локальной моделью в LM Studio ([docs/16](docs/16-phase-7-agent-mvp.md)). Дальше — Фаза 8 (безопасные действия и guardrails).
+Нужны Docker Desktop, kind, kubectl, Helm 4, .NET SDK 10, PowerShell 7 ([docs/09](docs/09-dev-environment.md)).
+
+```powershell
+./scripts/up.ps1           # всё с нуля одной командой (~20-30 мин с прогретыми кэшами), в конце — smoke test
+./scripts/smoke-test.ps1   # проверить, что всё работает (в любой момент)
+./scripts/recover-mesh.ps1 # после перезапуска Docker Desktop, если smoke test ругается на mesh
+./scripts/game-day.ps1     # хаос-сценарии + оценка агента
+./scripts/cluster-down.ps1 # удалить кластер (и все данные в нём)
+```
 
 | UI | Адрес |
 |---|---|
@@ -56,14 +56,24 @@ Framework с локальной моделью в LM Studio ([docs/16](docs/16-p
 | Prometheus | https://prometheus.localhost |
 | Alertmanager | https://alertmanager.localhost |
 | Linkerd Viz | `kubectl port-forward -n linkerd-viz svc/web 8084:8084` → http://localhost:8084 |
-| SRE-агент | `kubectl port-forward -n sre-agent svc/sre-agent 8099:80` → `POST /runs`, `GET /runs`, `GET /runs/{id}/report` |
-Код, манифесты и чарты появляются по мере прохождения фаз из [роадмапа](docs/01-roadmap.md).
+| SRE-агент | `kubectl port-forward -n sre-agent svc/sre-agent 8099:80` → `POST /runs`, `GET /runs/{id}/report`, `GET /actions`, `/approvals` |
 
-```powershell
-./scripts/cluster-up.ps1        # поднять кластер
-./scripts/build-images.ps1      # собрать образы (теги из values релизов) и загрузить в kind
-./scripts/deploy-infra.ps1      # платформа: Traefik, cert-manager, CA
-./scripts/deploy-apps.ps1       # Helm-релизы сервисов
-curl.exe --ssl-no-revoke --cacert .local/sandbox-root-ca.crt https://sandbox.localhost/
-``` Актуальный статус по
-фазам отмечается чек-боксами прямо в роадмапе.
+Браузер не знает наш CA: либо `curl.exe --ssl-no-revoke --cacert .local/sandbox-root-ca.crt ...`, либо импортируйте
+`.local/sandbox-root-ca.crt` в доверенные сами — это ваше решение.
+
+## Статус
+
+**Все 10 фаз пройдены** (упражнения в конце каждого документа фазы — для самостоятельной работы). Карта по фазам:
+
+| Фаза | Документ |
+|---|---|
+| 0–1. Окружение, базовый Kubernetes | [09](docs/09-dev-environment.md), [10](docs/10-phase-1-kubernetes-basics.md) |
+| 2. Ingress и TLS | [11](docs/11-phase-2-ingress-tls.md) |
+| 3. Helm | [12](docs/12-phase-3-helm.md) |
+| 4. Хранение данных | [13](docs/13-phase-4-storage.md) |
+| 5. Observability | [14](docs/14-phase-5-observability.md) |
+| 6. NetworkPolicy, mTLS, mesh | [15](docs/15-phase-6-network-security.md) |
+| 7. Агент MVP | [16](docs/16-phase-7-agent-mvp.md) |
+| 8. Безопасные действия | [17](docs/17-phase-8-actions-guardrails.md) |
+| 9. Chaos engineering | [18](docs/18-phase-9-chaos-engineering.md) |
+| 10. Всё с нуля, GitOps, итоги | [19](docs/19-phase-10-polish-and-lessons.md) |
