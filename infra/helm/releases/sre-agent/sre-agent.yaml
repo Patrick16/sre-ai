@@ -5,7 +5,7 @@ replicas: 1
 
 image:
   repository: sre-agent/host
-  tag: "0.5.3"   # 0.5.3: review fixes (docs/code-review-2026-11-10.md); 0.2.x: observe-only; 0.3.x: facts + synthesis; 0.4.x: actions + guardrails; 0.5.0: incidents, steady state incl. pods; 0.5.1: latency in Retrieve; 0.5.2: age of last termination
+  tag: "0.5.3"   # 0.5.3: code-review fixes (2026-11-10); 0.2.x: observe-only; 0.3.x: facts + synthesis; 0.4.x: actions + guardrails; 0.5.0: incidents, steady state incl. pods; 0.5.1: latency in Retrieve; 0.5.2: age of last termination
 
 # The agent talks to the Kubernetes API, so it needs a token. Rights = read in sandbox + exactly what the two actions
 # need. RBAC can't say "only this annotation" - patch on deployments would also allow scaling - so the admission

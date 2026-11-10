@@ -31,3 +31,5 @@ Thumbs.db
 .DS_Store
 
 *repomix*
+# Local-only code review reports
+docs/code-review-*.md
