@@ -25,6 +25,8 @@ public sealed class RalphLoop(
         try
         {
             // Inside the try: a disk/PVC error here must end THIS run as Failed, not crash the worker.
+            // NOTE: task.Id is new for every run, so this finds nothing today - a run is NOT resumed after an agent
+            // restart (RunState is a journal; docs/16). The call is the hook for real resumption with a stable id.
             state = await states.LoadAsync(task.Id, ct) ?? state;
             await audit.WriteAsync(new AuditEvent(run.StartedAt, task.Id, 0, "run.started",
                 new { trigger = task.Trigger.Kind.ToString(), alerts = task.Trigger.Alerts.Select(a => a.Name), task.Goal }), ct);
@@ -102,17 +104,29 @@ public sealed class RalphLoop(
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
-            Finish(run, RunOutcome.Cancelled, "the agent is shutting down");
+            // Never overwrite an outcome the loop has already decided (e.g. Resolved).
+            if (run.Outcome is null) Finish(run, RunOutcome.Cancelled, "the agent is shutting down");
         }
         catch (Exception ex)
         {
             log.LogError(ex, "Run {RunId} failed", task.Id);
-            Finish(run, RunOutcome.Failed, $"{ex.GetType().Name}: {ex.Message}");
+            if (run.Outcome is null) Finish(run, RunOutcome.Failed, $"{ex.GetType().Name}: {ex.Message}");
         }
 
         run.Facts = state.Facts.Select(f => $"[{f.At:HH:mm:ss}Z, iteration {f.Iteration}] {f.Text}").ToList();
         if (run.Outcome != RunOutcome.Cancelled)
-            run.Synthesis = await synthesizer.SynthesizeAsync(run, model, ct);
+        {
+            try
+            {
+                run.Synthesis = await synthesizer.SynthesizeAsync(run, model, ct);
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                // Shutting down during the synthesis: keep the outcome (e.g. Resolved) and the iterations, skip the summary
+                // (the report falls back to the last iteration).
+                log.LogWarning("Run {RunId}: the synthesis was cancelled by shutdown", task.Id);
+            }
+        }
 
         await audit.WriteAsync(new AuditEvent(time.GetUtcNow(), task.Id, run.Iterations.Count, "run.finished",
             new { outcome = run.Outcome.ToString(), reason = run.OutcomeReason }), CancellationToken.None);

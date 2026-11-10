@@ -263,3 +263,45 @@ public class ReportWriterTests
         finally { Directory.Delete(dir, true); }
     }
 }
+
+public class CorruptStateTests
+{
+    [Fact]
+    public async Task A_damaged_ledger_file_is_set_aside_and_the_agent_starts_with_an_empty_ledger()
+    {
+        var dir = Directory.CreateTempSubdirectory().FullName;
+        try
+        {
+            var path = Path.Combine(dir, "ledger.json");
+            File.WriteAllText(path, "[{\"at\": \"2026-11-10T10:00:00Z\", \"ke");     // a write that was cut off
+
+            var ledger = new FileActionLedger(path, TimeProvider.System);          // used to throw here, at host start
+
+            Assert.Empty(ledger.Since(DateTimeOffset.MinValue));
+            Assert.True(File.Exists(path + ".corrupt"));
+            await ledger.RecordAsync(DateTimeOffset.UtcNow, "restart_deployment/x", CancellationToken.None);   // and it works again
+            Assert.Single(new FileActionLedger(path, TimeProvider.System).Since(DateTimeOffset.MinValue));
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
+    [Fact]
+    public async Task RunState_with_an_unmeasured_error_ratio_can_be_saved_and_loaded()
+    {
+        var dir = Directory.CreateTempSubdirectory().FullName;
+        try
+        {
+            var store = new FileRunStateStore(dir);
+            var state = new RunState { RunId = "r1" };
+            var proposal = new ActionProposal("restart_deployment", "orders-api", "why");
+            var snapshot = new HealthSnapshot(DateTimeOffset.UtcNow, double.NaN, 1);
+            state.Actions.Add(new ActionRecord(1, DateTimeOffset.UtcNow, proposal, ActionMode.Auto, ActionStatus.Executed, "d", [], snapshot, snapshot));
+
+            await store.SaveAsync(state, CancellationToken.None);           // NaN used to be impossible to serialize
+            var loaded = await store.LoadAsync("r1", CancellationToken.None);
+
+            Assert.True(double.IsNaN(loaded!.Actions[0].Before!.ErrorRatio));
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+}

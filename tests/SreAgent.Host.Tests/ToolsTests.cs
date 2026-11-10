@@ -165,3 +165,33 @@ public class ToolScopeTests
     public void Level_regexes_are_only_level_names(string value, bool expected) =>
         Assert.Equal(expected, ToolsOptions.IsLevelRegex(value));
 }
+
+public class PrometheusNumberTests
+{
+    [Theory]
+    [InlineData("+Inf", double.PositiveInfinity)]
+    [InlineData("-Inf", double.NegativeInfinity)]
+    [InlineData("0.25", 0.25)]
+    [InlineData("1e-3", 0.001)]
+    public void Prometheus_number_formats(string text, double expected) => Assert.Equal(expected, PrometheusClient.ParseNumber(text));
+
+    [Fact]
+    public void NaN_and_garbage_become_NaN_instead_of_throwing()
+    {
+        Assert.True(double.IsNaN(PrometheusClient.ParseNumber("NaN")));
+        Assert.True(double.IsNaN(PrometheusClient.ParseNumber("not a number")));
+    }
+
+    [Fact]
+    public async Task A_vector_with_Inf_and_NaN_is_parsed_whole()
+    {
+        var prom = new PrometheusClient(StubHandler.Client(_ => StubHandler.Json(
+            """{"status":"success","data":{"resultType":"vector","result":[{"metric":{"a":"1"},"value":[1,"+Inf"]},{"metric":{"a":"2"},"value":[1,"NaN"]}]}}""")));
+
+        var (samples, error) = await prom.QueryAsync("1/0", CancellationToken.None);
+
+        Assert.Null(error);
+        Assert.Equal(2, samples.Count);
+        Assert.True(double.IsPositiveInfinity(samples[0].Value));
+    }
+}

@@ -151,3 +151,31 @@ public class GuardrailsTests
         Assert.Equal(expected, EffectJudge.Judge(new HealthSnapshot(at, e1, n1), new HealthSnapshot(at, e2, n2)));
     }
 }
+
+public class EffectJudgeTests
+{
+    private static HealthSnapshot S(double ratio, int notReady = 0) => new(DateTimeOffset.UtcNow, ratio, notReady);
+
+    [Fact]
+    public void Nothing_measured_is_NotMeasured_not_Unchanged() =>
+        Assert.Equal(ActionEffect.NotMeasured, EffectJudge.Judge(S(double.NaN), S(double.NaN)));
+
+    [Fact]
+    public void A_missing_reading_on_one_side_is_NotMeasured() =>
+        Assert.Equal(ActionEffect.NotMeasured, EffectJudge.Judge(S(0.4), S(double.NaN)));
+
+    [Fact]
+    public void Pods_can_still_tell_when_the_ratio_is_unknown()
+    {
+        Assert.Equal(ActionEffect.Improved, EffectJudge.Judge(S(double.NaN, 2), S(double.NaN, 0)));
+        Assert.Equal(ActionEffect.Degraded, EffectJudge.Judge(S(double.NaN, 0), S(double.NaN, 1)));
+    }
+
+    [Fact]
+    public void Measured_readings_judge_as_before()
+    {
+        Assert.Equal(ActionEffect.Improved, EffectJudge.Judge(S(0.4), S(0.0)));
+        Assert.Equal(ActionEffect.Unchanged, EffectJudge.Judge(S(0.4), S(0.4)));
+        Assert.Equal(ActionEffect.Degraded, EffectJudge.Judge(S(0.1), S(0.6)));
+    }
+}

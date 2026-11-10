@@ -70,8 +70,16 @@ public sealed class PrometheusClient(HttpClient http)
         return sb.ToString().TrimEnd();
     }
 
-    private static double ParseValue(JsonElement pair) =>
-        double.Parse(pair[1].GetString()!, NumberStyles.Float, CultureInfo.InvariantCulture);
+    // Prometheus writes "+Inf", "-Inf" and "NaN"; .NET only understands "Infinity" (so "+Inf" would throw).
+    internal static double ParseValue(JsonElement pair) => ParseNumber(pair[1].GetString() ?? "NaN");
+
+    internal static double ParseNumber(string s) => s switch
+    {
+        "+Inf" or "Inf" => double.PositiveInfinity,
+        "-Inf" => double.NegativeInfinity,
+        "NaN" => double.NaN,
+        _ => double.TryParse(s, NumberStyles.Float, CultureInfo.InvariantCulture, out var v) ? v : double.NaN,
+    };
 }
 
 public sealed record LogLine(DateTimeOffset At, string Pod, string Level, string Message);

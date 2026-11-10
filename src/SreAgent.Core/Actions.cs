@@ -29,7 +29,10 @@ public sealed record GuardrailCheck(string Name, bool Passed, string Detail);
 /// <summary>A cheap "how healthy is the namespace" reading, taken before an action and again after it.</summary>
 public sealed record HealthSnapshot(DateTimeOffset At, double ErrorRatio, int NotReadyPods)
 {
-    public override string ToString() => $"{ErrorRatio:P1} bad requests (1m), {NotReadyPods} pod(s) not ready";
+    public bool ErrorRatioMeasured => !double.IsNaN(ErrorRatio);
+
+    public override string ToString() =>
+        $"{(ErrorRatioMeasured ? ErrorRatio.ToString("P1") : "n/a")} bad requests (1m), {NotReadyPods} pod(s) not ready";
 }
 
 public sealed record ActionRecord(
@@ -166,6 +169,10 @@ public static class EffectJudge
     /// </summary>
     public static ActionEffect Judge(HealthSnapshot before, HealthSnapshot after)
     {
+        // Pods were measured, the error ratio was not (before or after): only the pod count can tell, and if it did not
+        // change either, we know nothing - "NotMeasured", not "Unchanged" (which would count against the circuit breaker).
+        if ((!before.ErrorRatioMeasured || !after.ErrorRatioMeasured) && before.NotReadyPods == after.NotReadyPods)
+            return ActionEffect.NotMeasured;
         if (after.NotReadyPods > before.NotReadyPods || after.ErrorRatio > before.ErrorRatio + 0.05)
             return ActionEffect.Degraded;
         var errorsFixed = before.ErrorRatio > HealthyErrorRatio && (after.ErrorRatio <= HealthyErrorRatio || after.ErrorRatio < before.ErrorRatio * 0.5);

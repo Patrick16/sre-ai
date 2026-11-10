@@ -67,7 +67,9 @@ function Inject($s) {
     if ($s.inject.kind -eq 'chaos') { kubectl apply -f "infra/chaos/$($s.inject.file)" | Out-Null; return }
     # Invariant culture: in a Russian locale "$(0.3)" would be "0,3", which isn't JSON.
     $json = ($s.inject.values.PSObject.Properties | % { "faults.$($_.Name)=" + [string]::Format([cultureinfo]::InvariantCulture, '{0}', $_.Value) })
-    $setArgs = $json | % { @('--set-json', $_) }
+    # A FLAT list of strings ('--set-json', 'faults.x=1', '--set-json', ...): % unrolls each pair, so splatting passes every
+    # element to helm as its own argument. (Do not "optimise" this into an array of arrays - that would glue the pair into one.)
+    [string[]]$setArgs = $json | % { '--set-json'; $_ }
     helm upgrade $s.inject.release $chart -n sandbox -f "infra/helm/releases/sandbox/$($s.inject.release).yaml" @setArgs --wait | Out-Null
 }
 function EndFault($s) {

@@ -106,7 +106,9 @@ public class RalphLoopTests
     [Fact]
     public async Task A_model_that_never_stops_calling_tools_is_cut_off_by_the_step_budget()
     {
-        var script = Enumerable.Range(0, 10).Select(_ => ScriptedChatClient.CallTool("list_pods"))
+        // 3 calls are allowed; the 4th is refused (the model is told), the 5th ignores that -> the loop is cut off,
+        // and the corrective turn (tools off) gets the answer.
+        var script = Enumerable.Range(0, 5).Select(_ => ScriptedChatClient.CallTool("list_pods"))
             .Append(ScriptedChatClient.Final(ScriptedChatClient.Json("answered after being stopped")))
             .ToArray();
         var model = new ScriptedChatClient(script);
@@ -117,6 +119,28 @@ public class RalphLoopTests
 
         Assert.True(run.Iterations[0].ToolCalls.Count <= 3);
         Assert.Equal(RunOutcome.Resolved, run.Outcome);
+        Assert.True(run.Iterations[0].Analysis.Parsed);
+        Assert.Equal("answered after being stopped", run.Iterations[0].Analysis.Hypothesis);
+    }
+
+    [Fact]
+    public async Task A_model_that_is_told_the_budget_is_gone_gets_to_answer_in_the_same_loop()
+    {
+        var script = Enumerable.Range(0, 4).Select(_ => ScriptedChatClient.CallTool("list_pods"))   // 4th is over budget
+            .Append(ScriptedChatClient.Final(ScriptedChatClient.Json("answered after the notice")))
+            .ToArray();
+        var model = new ScriptedChatClient(script);
+        var tool = AIFunctionFactory.Create(() => "pods", "list_pods");
+        var (loop, _, _, _) = Build(model, new ScriptedCompletion(true), tool);
+
+        var run = await loop.RunAsync(TestTasks.Create(maxToolCalls: 3), null, CancellationToken.None);
+
+        Assert.True(run.Iterations[0].Analysis.Parsed);
+        Assert.Equal(3, run.Iterations[0].ToolCalls.Count);
+        // The model was actually called again after the refusal and SAW the notice (no extra corrective turn needed).
+        // (requests 1-4: the tool rounds, 5: the answer; a 6th is the end-of-run synthesis)
+        Assert.Contains(model.Requests[4].SelectMany(m => m.Contents).OfType<FunctionResultContent>(),
+            r => r.Result?.ToString()?.Contains("BUDGET EXHAUSTED") == true);
     }
 
     [Fact]

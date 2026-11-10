@@ -127,7 +127,8 @@ public sealed class PrometheusHealthProbe(IKubernetes kube, PrometheusClient pro
         var (samples, error) = await prometheus.QueryAsync(
             $"(sum(rate(http_server_request_duration_seconds_count{{{sel}, http_response_status_code=~\"5..\"}}[1m])) or vector(0))" +
             $" / sum(rate(http_server_request_duration_seconds_count{{{sel}}}[1m]))", ct);
-        var ratio = error is null && samples.Count > 0 && double.IsFinite(samples[0].Value) ? samples[0].Value : 0;
+        // NaN = "could not measure" (Prometheus down, no traffic): NOT 0, or before=0/after=0 would read as "unchanged".
+        var ratio = error is null && samples.Count > 0 && double.IsFinite(samples[0].Value) ? samples[0].Value : double.NaN;
 
         var pods = await kube.CoreV1.ListNamespacedPodAsync(ns, cancellationToken: ct);
         var notReady = pods.Items.Count(p => p.Status.Phase != "Succeeded" && p.Status.Conditions?.Any(c => c.Type == "Ready" && c.Status == "True") != true);

@@ -5,6 +5,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <InternalsVisibleTo Include="SreAgent.Host.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="KubernetesClient" Version="21.0.8" />
     <PackageReference Include="Microsoft.Extensions.Http" Version="10.0.0" />
   </ItemGroup>

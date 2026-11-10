@@ -90,7 +90,7 @@ public sealed record RunStateEntry(
 
 public sealed class FileRunStateStore(string directory) : IRunStateStore
 {
-    private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web) { WriteIndented = true, Converters = { new System.Text.Json.Serialization.JsonStringEnumConverter() } };
+    private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web) { WriteIndented = true, NumberHandling = System.Text.Json.Serialization.JsonNumberHandling.AllowReadingFromString | System.Text.Json.Serialization.JsonNumberHandling.AllowNamedFloatingPointLiterals, Converters = { new System.Text.Json.Serialization.JsonStringEnumConverter() } };
 
     public async Task<RunState?> LoadAsync(string runId, CancellationToken ct)
     {

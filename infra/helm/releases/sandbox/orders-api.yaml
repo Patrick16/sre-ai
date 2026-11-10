@@ -3,7 +3,7 @@ replicas: 3
 
 image:
   repository: sandbox/orders-api
-  tag: "0.5.0"   # 0.5.0: review fixes - 400 on a bad order, newest-first list, /debug behind the API key, retention, no dev secrets in the image; 0.2.x: PostgreSQL; 0.3.0: OpenTelemetry metrics on :9090, JSON logs; 0.3.1: no GSSAPI probing; 0.4.0: fault modes (Phase 9)
+  tag: "0.5.1"   # 0.5.1: code split into files (no behaviour change); 0.5.0: review fixes - 400 on a bad order, newest-first list, /debug behind the API key, retention, no dev secrets in the image; 0.2.x: PostgreSQL; 0.3.0: OpenTelemetry metrics on :9090, JSON logs; 0.3.1: no GSSAPI probing; 0.4.0: fault modes (Phase 9)
 
 # 99% of requests must be non-5xx and faster than 250 ms (0.25 is a bucket boundary of http.server.request.duration).
 slo:

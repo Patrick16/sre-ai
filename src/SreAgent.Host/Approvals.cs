@@ -51,7 +51,27 @@ public sealed class FileActionLedger : IActionLedger
     {
         _path = path;
         _time = time;
-        _entries = File.Exists(path) ? JsonSerializer.Deserialize<List<Entry>>(File.ReadAllText(path), Json) ?? [] : [];
+        _entries = Load(path);
+    }
+
+    /// <summary>
+    /// A damaged file (write interrupted, hand edit) must not stop the agent from starting - this runs while the host
+    /// is being built. It is set aside as .corrupt for a human to look at and the ledger starts empty (the rate limit
+    /// of the last 24 h is forgotten, which is the lesser evil).
+    /// </summary>
+    private static List<Entry> Load(string path)
+    {
+        if (!File.Exists(path)) return [];
+        try
+        {
+            return JsonSerializer.Deserialize<List<Entry>>(File.ReadAllText(path), Json) ?? [];
+        }
+        catch (Exception ex) when (ex is JsonException or IOException)
+        {
+            try { File.Move(path, path + ".corrupt", overwrite: true); }
+            catch (IOException) { /* nothing more we can do; start empty anyway */ }
+            return [];
+        }
     }
 
     public IReadOnlyList<(DateTimeOffset At, string Key)> Since(DateTimeOffset from)

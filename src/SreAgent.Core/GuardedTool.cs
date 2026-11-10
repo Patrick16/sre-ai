@@ -10,7 +10,11 @@ public sealed class ToolBudget(int max)
     private int _used;
     public int Max { get; } = max;
     public int Used => Volatile.Read(ref _used);
+    private int _refused;
     public bool TryTake() => Interlocked.Increment(ref _used) <= Max;
+
+    /// <summary>Counts a call that was refused because the budget is gone; returns how many were refused so far.</summary>
+    public int NoteRefusal() => Interlocked.Increment(ref _refused);
 }
 
 /// <summary>
@@ -34,8 +38,14 @@ public sealed class GuardedTool(
     {
         if (!budget.TryTake())
         {
-            // Not executed. Also stop the framework's function-calling loop for this request.
-            if (FunctionInvokingChatClient.CurrentContext is { } ctx) ctx.Terminate = true;
+            // Not executed. The FIRST refusal only returns the "budget exhausted, answer now" text: the loop goes on, the
+            // model sees it and can answer. (Terminate = true stops the loop BEFORE the model is called again, so the
+            // text would never be read.) A model that ignores it and asks again is cut off: Terminate, and the
+            // iteration's corrective turn (tools off) gets the answer.
+            // FunctionInvokingChatClient.CurrentContext is part of the Microsoft.Extensions.AI preview surface and may change
+            // with a package update; if it does, this fails to compile (it is not looked up by name at run time), and the
+            // budget still holds: refused calls are never executed, and MaximumIterationsPerRequest bounds the loop.
+            if (budget.NoteRefusal() > 1 && FunctionInvokingChatClient.CurrentContext is { } ctx) ctx.Terminate = true;
             await audit.WriteAsync(new AuditEvent(time.GetUtcNow(), runId, iteration, "tool.refused",
                 new { tool = Name, reason = "budget", budget.Max }), cancellationToken);
             return BudgetExhausted;
