@@ -27,6 +27,9 @@ class OrdersOptions
     /// <summary>Processed orders older than this many hours are deleted (the load generator never stops creating them). 0 = keep all.</summary>
     public int RetentionHours { get; set; }
 
+    /// <summary>Orders still "pending" after this many days are deleted too (a worker that never came back). 0 = keep.</summary>
+    public int PendingRetentionDays { get; set; }
+
     public string Banner { get; set; } = "default";
     public string ApiKeyFile { get; set; } = "/etc/orders-api/secret/api-key";
     public string? ApiKey { get; set; }

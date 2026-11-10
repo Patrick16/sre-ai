@@ -54,6 +54,13 @@ public sealed class PrometheusClient(HttpClient http)
         return (samples, null);
     }
 
+    /// <summary>Same spelling as the Prometheus UI (.NET would print "Infinity"), so the model sees what a human sees.</summary>
+    internal static string FormatValue(double v) =>
+        double.IsPositiveInfinity(v) ? "+Inf"
+        : double.IsNegativeInfinity(v) ? "-Inf"
+        : double.IsNaN(v) ? "NaN"
+        : v.ToString("0.####", CultureInfo.InvariantCulture);
+
     private static string Truncate(string s) => s.Length > 200 ? s[..200] + "…" : s;
 
     public static string Format(IReadOnlyList<PromSample> samples, int max = 25)
@@ -64,7 +71,7 @@ public sealed class PrometheusClient(HttpClient http)
         {
             var labels = string.Join(", ", s.Labels.Where(l => l.Key is not ("__name__" or "endpoint" or "instance" or "job" or "container" or "otel_scope_name" or "prometheus" or "service"))
                 .Select(l => $"{l.Key}={l.Value}"));
-            sb.AppendLine($"{{{labels}}} = {s.Value.ToString("0.####", CultureInfo.InvariantCulture)}");
+            sb.AppendLine($"{{{labels}}} = {FormatValue(s.Value)}");
         }
         if (samples.Count > max) sb.AppendLine($"…and {samples.Count - max} more series");
         return sb.ToString().TrimEnd();

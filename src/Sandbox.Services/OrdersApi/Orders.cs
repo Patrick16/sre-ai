@@ -80,11 +80,12 @@ class OrderStore(NpgsqlDataSource db)
         }
     }
 
-    /// <returns>how many processed orders older than the cutoff were deleted.</returns>
-    public Task<int> DeleteProcessedOlderThanAsync(TimeSpan age, CancellationToken ct) => WithSchemaAsync(async () =>
+    /// <returns>how many orders of the given status older than the cutoff were deleted.</returns>
+    public Task<int> DeleteOlderThanAsync(string status, TimeSpan age, CancellationToken ct) => WithSchemaAsync(async () =>
     {
-        await using var cmd = db.CreateCommand("DELETE FROM orders WHERE status = 'processed' AND created_at < now() - $1");
+        await using var cmd = db.CreateCommand("DELETE FROM orders WHERE status = $2 AND created_at < now() - $1");
         cmd.Parameters.Add(new() { Value = age });
+        cmd.Parameters.Add(new() { Value = status });
         return await cmd.ExecuteNonQueryAsync(ct);
     }, ct);
 
@@ -135,11 +136,21 @@ class OrderRetention(OrderStore store, IOptionsMonitor<OrdersOptions> options, I
         while (await timer.WaitForNextTickAsync(ct))
         {
             var hours = options.CurrentValue.RetentionHours;
-            if (hours <= 0) continue;
+            var pendingDays = options.CurrentValue.PendingRetentionDays;
             try
             {
-                var deleted = await store.DeleteProcessedOlderThanAsync(TimeSpan.FromHours(hours), ct);
-                if (deleted > 0) logger.LogInformation("Retention: deleted {Count} processed orders older than {Hours} h", deleted, hours);
+                if (hours > 0)
+                {
+                    var deleted = await store.DeleteOlderThanAsync("processed", TimeSpan.FromHours(hours), ct);
+                    if (deleted > 0) logger.LogInformation("Retention: deleted {Count} processed orders older than {Hours} h", deleted, hours);
+                }
+                if (pendingDays > 0)
+                {
+                    // A much longer window: pending orders should be picked up within seconds; one that is still there
+                    // after days means the worker never came back, and it would otherwise stay (and grow the table) for ever.
+                    var stale = await store.DeleteOlderThanAsync("pending", TimeSpan.FromDays(pendingDays), ct);
+                    if (stale > 0) logger.LogWarning("Retention: deleted {Count} orders that stayed pending for more than {Days} days", stale, pendingDays);
+                }
             }
             catch (Exception ex) when (!ct.IsCancellationRequested)
             {

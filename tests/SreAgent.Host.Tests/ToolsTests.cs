@@ -195,3 +195,32 @@ public class PrometheusNumberTests
         Assert.True(double.IsPositiveInfinity(samples[0].Value));
     }
 }
+
+public class FormattingTests
+{
+    [Theory]
+    [InlineData(double.PositiveInfinity, "+Inf")]
+    [InlineData(double.NegativeInfinity, "-Inf")]
+    [InlineData(double.NaN, "NaN")]
+    [InlineData(0.25, "0.25")]
+    [InlineData(3.0, "3")]
+    public void Values_are_spelled_like_the_Prometheus_UI(double value, string expected) =>
+        Assert.Equal(expected, PrometheusClient.FormatValue(value));
+
+    [Fact]
+    public void NaN_is_written_to_disk_as_a_quoted_string_which_is_valid_JSON()
+    {
+        // System.Text.Json with AllowNamedFloatingPointLiterals writes "NaN" WITH quotes, so jq and others can read it.
+        var options = new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web)
+        {
+            NumberHandling = System.Text.Json.Serialization.JsonNumberHandling.AllowReadingFromString | System.Text.Json.Serialization.JsonNumberHandling.AllowNamedFloatingPointLiterals,
+        };
+        var json = System.Text.Json.JsonSerializer.Serialize(new HealthSnapshotLike(double.NaN, 0), options);
+
+        Assert.Contains("\"errorRatio\":\"NaN\"", json);
+        using var doc = System.Text.Json.JsonDocument.Parse(json);     // a strict parser accepts it
+        Assert.Equal("NaN", doc.RootElement.GetProperty("errorRatio").GetString());
+    }
+
+    private sealed record HealthSnapshotLike(double ErrorRatio, int NotReadyPods);
+}
