@@ -13,5 +13,6 @@
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/SreAgent.Core.Tests/SreAgent.Core.Tests.csproj" />
+    <Project Path="tests/SreAgent.Host.Tests/SreAgent.Host.Tests.csproj" />
   </Folder>
 </Solution>

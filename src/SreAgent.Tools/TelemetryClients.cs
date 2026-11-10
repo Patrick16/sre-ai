@@ -12,11 +12,32 @@ public sealed class PrometheusClient(HttpClient http)
 {
     public async Task<(IReadOnlyList<PromSample> Samples, string? Error)> QueryAsync(string promql, CancellationToken ct)
     {
-        using var response = await http.GetAsync($"/api/v1/query?query={Uri.EscapeDataString(promql)}", ct);
-        using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync(ct));
+        string body;
+        try
+        {
+            using var response = await http.GetAsync($"/api/v1/query?query={Uri.EscapeDataString(promql)}", ct);
+            body = await response.Content.ReadAsStringAsync(ct);
+        }
+        catch (Exception ex) when (ex is HttpRequestException || (ex is OperationCanceledException && !ct.IsCancellationRequested))
+        {
+            // Network error or the HttpClient timeout (not our own cancellation): data, so the caller can decide.
+            return ([], $"Prometheus unreachable: {ex.GetType().Name}: {ex.Message}");
+        }
+
+        JsonDocument doc;
+        try { doc = JsonDocument.Parse(body); }
+        catch (JsonException) { return ([], $"Prometheus returned something that is not JSON: {Truncate(body)}"); }
+
+        using var _ = doc;
         var root = doc.RootElement;
-        if (root.GetProperty("status").GetString() != "success")
-            return ([], $"{root.GetProperty("errorType").GetString()}: {root.GetProperty("error").GetString()}");
+        if (!root.TryGetProperty("status", out var status))
+            return ([], $"unexpected Prometheus response: {Truncate(body)}");
+        if (status.GetString() != "success")
+        {
+            var type = root.TryGetProperty("errorType", out var t) ? t.GetString() : "error";
+            var message = root.TryGetProperty("error", out var e) ? e.GetString() : Truncate(body);
+            return ([], $"{type}: {message}");
+        }
 
         var data = root.GetProperty("data");
         var samples = new List<PromSample>();
@@ -32,6 +53,8 @@ public sealed class PrometheusClient(HttpClient http)
         }
         return (samples, null);
     }
+
+    private static string Truncate(string s) => s.Length > 200 ? s[..200] + "…" : s;
 
     public static string Format(IReadOnlyList<PromSample> samples, int max = 25)
     {

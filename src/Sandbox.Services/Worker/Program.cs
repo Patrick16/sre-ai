@@ -88,10 +88,13 @@ class OrderProcessor(IHttpClientFactory factory, Heartbeat heartbeat, WorkerMetr
             {
                 await ProcessPendingAsync(stoppingToken);
             }
-            catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException && !stoppingToken.IsCancellationRequested)
+            catch (Exception ex) when (!stoppingToken.IsCancellationRequested)
             {
+                // ANY failure of one polling round (network, timeout, a proxy answering 200 with HTML -> JsonException ...)
+                // is logged and counted; the next round tries again. An unhandled exception here would stop the
+                // BackgroundService and take the whole process down with it.
                 metrics.Polls.Add(1, new KeyValuePair<string, object?>("result", "failed"));
-                logger.LogWarning("orders-api call failed: {Message}", ex.Message);
+                logger.LogWarning("polling round failed: {Type}: {Message}", ex.GetType().Name, ex.Message);
             }
             await Task.Delay(interval, stoppingToken);
         }
@@ -115,6 +118,9 @@ class OrderProcessor(IHttpClientFactory factory, Heartbeat heartbeat, WorkerMetr
             logger.LogInformation("Polled {Pod}: {Count} pending", servedBy, pending.Length);
         foreach (var order in pending)
         {
+            // Once per order, not only once per round: with a long queue and a slow orders-api the loop is slow but
+            // alive, and liveness must not restart us because a DEPENDENCY is slow.
+            heartbeat.Beat();
             using var result = await client.PostAsync($"/orders/{order.Id}/process", null, ct);
             if (result.IsSuccessStatusCode) metrics.Processed.Add(1);
             logger.LogInformation("Order {Id} ({Item}) listed by {ListedBy}: process -> {Status}",

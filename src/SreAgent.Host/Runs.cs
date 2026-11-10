@@ -26,9 +26,12 @@ public sealed record RunSummary(
 /// </summary>
 public sealed class RunQueue(IOptions<AgentOptions> options, TimeProvider time)
 {
-    private readonly Channel<RunRequest> _channel = Channel.CreateBounded<RunRequest>(new BoundedChannelOptions(10) { FullMode = BoundedChannelFullMode.DropWrite });
+    // FullMode.Wait: TryWrite then returns false when full. (DropWrite would return true and silently lose the run.)
+    private readonly Channel<RunRequest> _channel = Channel.CreateBounded<RunRequest>(new BoundedChannelOptions(10) { FullMode = BoundedChannelFullMode.Wait });
     private readonly ConcurrentDictionary<string, RunSummary> _runs = new();
     private readonly ConcurrentDictionary<string, string> _activeByNamespace = new();
+    private readonly ConcurrentDictionary<string, DateTimeOffset> _handled = new();
+    private const int MaxRemembered = 200;
 
     public ChannelReader<RunRequest> Reader => _channel.Reader;
 
@@ -42,33 +45,72 @@ public sealed class RunQueue(IOptions<AgentOptions> options, TimeProvider time)
     /// <returns>false when a run for the same namespace is already queued or running, or the queue is full.</returns>
     public bool TryEnqueue(RunRequest request)
     {
-        if (!_activeByNamespace.TryAdd(request.Task.Namespace, request.Task.Id)) return false;
+        var ns = request.Task.Namespace;
+        var id = request.Task.Id;
+        if (!_activeByNamespace.TryAdd(ns, id)) return false;
+
+        // Bookkeeping BEFORE the channel write: the worker may take the request off the queue immediately, and
+        // MarkRunning must already find it (the other order was a race that could crash the worker).
+        _runs[id] = new RunSummary(id, request.Task.Trigger.Kind.ToString(), "queued", time.GetUtcNow(), null, 0, null, null, null, null);
         if (!_channel.Writer.TryWrite(request))
         {
-            _activeByNamespace.TryRemove(request.Task.Namespace, out _);
+            _runs.TryRemove(id, out _);
+            _activeByNamespace.TryRemove(ns, out _);
             return false;
         }
-        _runs[request.Task.Id] = new RunSummary(request.Task.Id, request.Task.Trigger.Kind.ToString(), "queued", time.GetUtcNow(), null, 0, null, null, null, null);
+        Trim();
         return true;
     }
 
-    public void MarkRunning(string id) =>
-        _runs.AddOrUpdate(id, _ => throw new InvalidOperationException(), (_, s) => s with { Status = "running" });
+    public void MarkRunning(string id)
+    {
+        if (_runs.TryGetValue(id, out var s)) _runs[id] = s with { Status = "running" };
+    }
 
     public void Complete(AgentRun run)
     {
         _activeByNamespace.TryRemove(run.Task.Namespace, out _);
-        _runs.AddOrUpdate(run.Task.Id, _ => throw new InvalidOperationException(), (_, s) => s with
-        {
-            Status = "finished",
-            FinishedAt = run.FinishedAt,
-            Iterations = run.Iterations.Count,
-            Hypothesis = run.Synthesis?.RootCause ?? run.Iterations.LastOrDefault()?.Analysis.Hypothesis,
-            Outcome = run.Outcome?.ToString(),
-            OutcomeReason = run.OutcomeReason,
-            ReportPath = run.ReportPath,
-        });
+        var id = run.Task.Id;
+        var queuedAt = _runs.TryGetValue(id, out var old) ? old.QueuedAt : run.StartedAt;
+        _runs[id] = new RunSummary(id, run.Task.Trigger.Kind.ToString(), "finished", queuedAt, run.FinishedAt, run.Iterations.Count,
+            run.Synthesis?.RootCause ?? run.Iterations.LastOrDefault()?.Analysis.Hypothesis,
+            run.Outcome?.ToString(), run.OutcomeReason, run.ReportPath);
     }
+
+    /// <summary>The agent is shutting down mid-run: free the namespace slot (the run is not coming back).</summary>
+    public void Abandon(TaskSpec task) => _activeByNamespace.TryRemove(task.Namespace, out _);
+
+    /// <summary>The list is in memory only; keep the newest <see cref="MaxRemembered"/> finished runs (reports stay on disk).</summary>
+    private void Trim()
+    {
+        if (_runs.Count <= MaxRemembered) return;
+        foreach (var r in _runs.Values.Where(r => r.Status == "finished").OrderBy(r => r.QueuedAt).Take(_runs.Count - MaxRemembered))
+            _runs.TryRemove(r.Id, out _);
+    }
+
+    // --- Alert de-duplication -------------------------------------------------------------------------------------
+    // Alertmanager repeats a firing alert every repeat_interval (1h). Without this, an alert that stays on for hours
+    // would start a new LLM run - minutes of GPU - every hour for the same problem.
+
+    /// <summary>True when every one of these alerts (by fingerprint) already started a run within the suppression window.</summary>
+    public bool AlreadyHandled(IEnumerable<string> fingerprints)
+    {
+        var window = TimeSpan.FromMinutes(options.Value.AlertSuppressionMinutes);
+        if (window <= TimeSpan.Zero) return false;
+        var now = time.GetUtcNow();
+        var list = fingerprints.ToList();
+        return list.Count > 0 && list.All(f => _handled.TryGetValue(f, out var at) && now - at < window);
+    }
+
+    public void RememberHandled(IEnumerable<string> fingerprints)
+    {
+        var now = time.GetUtcNow();
+        foreach (var f in fingerprints) _handled[f] = now;
+        foreach (var old in _handled.Where(kv => now - kv.Value > TimeSpan.FromHours(24)).Select(kv => kv.Key)) _handled.TryRemove(old, out _);
+    }
+
+    /// <summary>A resolved alert that fires again is a NEW problem and must be investigated again.</summary>
+    public void ForgetHandled(string fingerprint) => _handled.TryRemove(fingerprint, out _);
 
     public string? ActiveRunFor(string ns) => _activeByNamespace.GetValueOrDefault(ns);
 
@@ -93,7 +135,28 @@ public sealed class AgentWorker(
             metrics.RunStarted(request.Task.Trigger.Kind);
             log.LogWarning("Run {RunId} started ({Trigger}): {Goal}", request.Task.Id, request.Task.Trigger.Kind, request.Task.Goal);
 
-            var run = await loop.RunAsync(request.Task, request.Model, stoppingToken);
+            AgentRun run;
+            try
+            {
+                run = await loop.RunAsync(request.Task, request.Model, stoppingToken);
+            }
+            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+            {
+                queue.Abandon(request.Task);
+                throw;
+            }
+            catch (Exception ex)
+            {
+                // RalphLoop handles its own errors; this is the last net. One broken run must not stop the host
+                // (an unhandled exception in a BackgroundService does) and must not leave the namespace "busy" forever.
+                log.LogError(ex, "Run {RunId} crashed", request.Task.Id);
+                run = new AgentRun(request.Task, request.Task.Trigger.At)
+                {
+                    Outcome = RunOutcome.Failed,
+                    OutcomeReason = $"{ex.GetType().Name}: {ex.Message}",
+                    FinishedAt = DateTimeOffset.UtcNow,
+                };
+            }
             try
             {
                 run.ReportPath = await reports.WriteAsync(run, CancellationToken.None);

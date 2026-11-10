@@ -56,6 +56,8 @@ function WaitSteady([int]$minutes, [int]$quiet) {
 function Api([string]$method, [string]$path, $body) {
     $curlArgs = @('-s', '-X', $method, "http://localhost:$AgentPort$path")
     if ($body) { $curlArgs += @('-H', 'Content-Type: application/json', '-d', ($body | ConvertTo-Json -Compress)) }
+    # Only needed when the agent runs with Agent__ApiToken (docs/17): $env:SRE_AGENT_TOKEN = '<the token>'
+    if ($env:SRE_AGENT_TOKEN) { $curlArgs += @('-H', "X-Agent-Token: $env:SRE_AGENT_TOKEN") }
     curl.exe @curlArgs
 }
 

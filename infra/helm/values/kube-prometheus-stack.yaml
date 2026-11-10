@@ -47,7 +47,9 @@ prometheus:
     scrapeConfigSelectorNilUsesHelmValues: false
     scrapeInterval: 15s
     evaluationInterval: 15s
-    retention: 3d
+    # Longer than the longest SLO window (3d for the slow burn-rate alert): with retention == window the oldest part of
+    # the window has already been deleted, and that alert would compute over less data than it claims.
+    retention: 5d
     retentionSize: 4GB
     # Time series on a PVC (Phase 4): metrics survive a Prometheus restart.
     storageSpec:

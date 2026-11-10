@@ -3,7 +3,7 @@
 #
 # Every kind node has its own containerd and image store and can't see Docker Desktop's images, so without
 # a cache each node downloads every community image itself, again after every cluster re-creation.
-# Here: one registry:3 container per upstream registry, in proxy mode, data in a named Docker volume.
+# Here: one registry:2.8.3 container per upstream registry (v2, not v3 - see below), in proxy mode, data in a named Docker volume.
 # Nodes are told (hosts.toml) to pull through it; if a cache is down they fall back to the internet.
 # The caches are deliberately NOT removed by cluster-down.ps1 - surviving the cluster is the point.
 [CmdletBinding()]

@@ -109,6 +109,7 @@ networkPolicy:
   enabled: true
   allowFromApps: []        # apps in the same namespace that may call our "http" port, e.g. [frontend, worker]
   allowFromNamespaces: []  # whole namespaces that may call it, e.g. [traefik]
+  allowFromPods: []        # ONE app of another namespace (narrower): [{ namespace: monitoring, app: alertmanager }]
   allowToApps: []          # whom we call: [{ app: orders-api, port: http }]
   allowToNamespaces: []    # any pod of another namespace on a port: [{ namespace: monitoring, port: 9090 }]
   allowToCidrs: []         # outside the pod network: [{ cidr: 172.18.0.0/16, port: 6443 }]

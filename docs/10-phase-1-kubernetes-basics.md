@@ -125,7 +125,7 @@ Kubelet синхронизирует тома с периодом около м�
 | 4 | Поменять `Frontend__Greeting` через `kubectl edit configmap frontend-config -n sandbox` | Ответ не меняется, пока не сделать `kubectl rollout restart deploy/frontend -n sandbox` |
 | 5 | Поменять `Banner` в `orders-api-config`, подождать ~1 мин, `GET /info` у пода | Меняется без рестарта (эффект 4) |
 | 6 | `kubectl get secret sandbox-api-key -n sandbox -o jsonpath='{.data.api-key}'` и декодировать base64 | Секрет — это **не шифрование**, а base64; защищает только RBAC |
-| 7 | Через port-forward к поду orders-api: `POST /debug/allocate?mb=300` | `kubectl describe pod` → `Last State: Terminated, Reason: OOMKilled`, `Restart Count: 1` |
+| 7 | Через port-forward к поду orders-api: `POST /debug/allocate?mb=300` с заголовком `X-Api-Key` (с ревью 2026-11-10 эндпоинт под ключом, `mb` от 1 до 512) | `kubectl describe pod` → `Last State: Terminated, Reason: OOMKilled`, `Restart Count: 1` |
 | 8 | «Плохой релиз»: `kubectl set image deploy/orders-api orders-api=sandbox/orders-api:0.9.9 -n sandbox` | Новый под в `ErrImagePull`/`ImagePullBackOff`, старые 3 продолжают работать (спасибо `maxUnavailable: 0`). Откат: `kubectl rollout undo deploy/orders-api -n sandbox` |
 | 9 | `kubectl rollout history deploy/orders-api -n sandbox` | История ревизий — то, что позже будет использовать агент для rollback |
 | 10 | Удалить Secret: `kubectl delete secret sandbox-api-key -n sandbox`, затем удалить под frontend | Новый под в `CreateContainerConfigError` — Secret нужен на старте. Вернуть: `./scripts/deploy-apps.ps1` |

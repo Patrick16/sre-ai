@@ -21,6 +21,21 @@ public sealed class AgentOptions
     /// <summary>Alert severities that start a run.</summary>
     public List<string> Severities { get; set; } = ["critical", "warning"];
 
+    /// <summary>
+    /// After a run started for an alert (by fingerprint), the same still-firing alert does not start another one for
+    /// this many minutes (Alertmanager repeats it every hour). A resolved alert is forgotten at once. 0 = off.
+    /// </summary>
+    public int AlertSuppressionMinutes { get; set; } = 240;
+
+    /// <summary>RunState files older than this many days are deleted at startup (reports and audit stay). 0 = keep all.</summary>
+    public int StateRetentionDays { get; set; } = 14;
+
+    /// <summary>
+    /// Shared secret for the endpoints that change something (POST /runs, POST /approvals/{id}): sent as the header
+    /// <c>X-Agent-Token</c>. Empty = not required (then only the NetworkPolicy protects them).
+    /// </summary>
+    public string ApiToken { get; set; } = "";
+
     public LimitsOptions Limits { get; set; } = new();
 
     public sealed class LimitsOptions

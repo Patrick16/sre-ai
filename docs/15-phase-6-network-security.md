@@ -29,7 +29,7 @@ loadgen ──► traefik   frontend ──────────► orders-ap
                                                │
                                                ▼
                                             postgres (from: orders-api; to: никого)
-monitoring (ns) ──► :metrics, :4191 всех подов          sre-agent (from: monitoring — webhook Alertmanager)
+monitoring (ns) ──► :metrics, :4191 всех подов          sre-agent (from: под alertmanager — webhook)
 ```
 
 ```yaml
@@ -43,6 +43,9 @@ networkPolicy:
 ```
 
 Детали, которые легко упустить:
+- **`allowFromNamespaces` пускает весь namespace, `allowFromPods` — один под в нём** (`{ namespace: monitoring, app:
+  alertmanager }`: `namespaceSelector` и `podSelector` в одном элементе означают «и то, и другое»). Агенту нужен второй
+  вариант: у его API есть `POST /approvals` и `POST /runs`, а `monitoring` — privileged namespace с кучей чужих подов.
 - **Порт — это порт пода, а не Service.** Политика видит пакет после DNAT Service: `orders-api:80` → под `:8080`.
   Поэтому в правилах — **имена** портов контейнера (`http`, `postgres`), а не 80.
 - **Политики складываются.** Разрешено, если разрешает *хотя бы одна* политика, выбирающая под. Запрещающих правил нет —

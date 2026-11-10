@@ -17,9 +17,11 @@ string[] allowedNamespaces = ["sandbox"];
 
 var app = Arg("--app") ?? Fail("--app <name> is required, e.g. --app orders-api");
 var ns = Arg("--namespace") ?? "sandbox";
-var everySeconds = int.Parse(Arg("--every") ?? "60");
-var forMinutes = double.Parse(Arg("--for") ?? "0", System.Globalization.CultureInfo.InvariantCulture);
-var keep = int.Parse(Arg("--keep") ?? "2");
+// A typo like "--every abc" is a clear message and exit code 2, not an unhandled FormatException.
+var everySeconds = int.TryParse(Arg("--every") ?? "60", out var every) && every > 0 ? every : FailInt("--every must be a positive whole number of seconds");
+var forMinutes = double.TryParse(Arg("--for") ?? "0", System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var minutes) && minutes >= 0
+    ? minutes : FailDouble("--for must be a number of minutes (0 = one round)");
+var keep = int.TryParse(Arg("--keep") ?? "2", out var keepPods) && keepPods >= 0 ? keepPods : FailInt("--keep must be a whole number >= 0");
 var kill = args.Contains("--kill");
 
 if (!allowedNamespaces.Contains(ns)) Fail($"namespace '{ns}' is not allowed (only: {string.Join(", ", allowedNamespaces)})");
@@ -46,8 +48,15 @@ do
         if (kill)
         {
             // gracePeriodSeconds 0: like a crash, not a polite shutdown (no preStop, no draining).
-            await kube.CoreV1.DeleteNamespacedPodAsync(victim.Name(), ns, gracePeriodSeconds: 0);
-            Log($"killed {victim.Name()} on {victim.Spec.NodeName} ({ready.Count - 1} of {pods.Count} left ready)");
+            try
+            {
+                await kube.CoreV1.DeleteNamespacedPodAsync(victim.Name(), ns, gracePeriodSeconds: 0);
+                Log($"killed {victim.Name()} on {victim.Spec.NodeName} ({ready.Count - 1} of {pods.Count} left ready)");
+            }
+            catch (k8s.Autorest.HttpOperationException ex) when (ex.Response.StatusCode == System.Net.HttpStatusCode.NotFound)
+            {
+                Log($"skip: {victim.Name()} was already gone (something else replaced it first)");
+            }
         }
         else
         {
@@ -72,6 +81,10 @@ string? Arg(string name)
     var i = Array.IndexOf(args, name);
     return i >= 0 && i + 1 < args.Length ? args[i + 1] : null;
 }
+
+static int FailInt(string message) { Fail(message); return 0; }
+
+static double FailDouble(string message) { Fail(message); return 0; }
 
 static string Fail(string message)
 {

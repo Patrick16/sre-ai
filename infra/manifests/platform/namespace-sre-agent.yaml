@@ -1,0 +1,10 @@
+# The agent's own namespace: restricted Pod Security and in the mesh, like sandbox (docs/16, docs/17).
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: sre-agent
+  annotations:
+    linkerd.io/inject: enabled
+  labels:
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/warn: restricted

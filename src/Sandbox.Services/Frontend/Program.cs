@@ -54,6 +54,11 @@ app.MapGet("/", async (IHttpClientFactory factory, IConfiguration config) =>
     {
         return Results.Problem($"orders-api unreachable: {ex.Message}", statusCode: StatusCodes.Status502BadGateway);
     }
+    catch (TaskCanceledException)
+    {
+        // HttpClient.Timeout (5 s): the dependency is too slow - a gateway timeout, not an error of ours.
+        return Results.Problem("orders-api did not answer in time", statusCode: StatusCodes.Status504GatewayTimeout);
+    }
 });
 
 app.MapPost("/order", async (IHttpClientFactory factory, string item) =>
@@ -68,6 +73,10 @@ app.MapPost("/order", async (IHttpClientFactory factory, string item) =>
     catch (HttpRequestException ex)
     {
         return Results.Problem($"orders-api unreachable: {ex.Message}", statusCode: StatusCodes.Status502BadGateway);
+    }
+    catch (TaskCanceledException)
+    {
+        return Results.Problem("orders-api did not answer in time", statusCode: StatusCodes.Status504GatewayTimeout);
     }
 });
 

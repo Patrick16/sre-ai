@@ -30,7 +30,7 @@ public sealed partial class Guardrails(ActionSettings settings, IActionExecutor 
 
         // 2. Scope: a single, well-formed object name in the run's namespace. The target comes from the model, i.e.
         // possibly from injected text in a log line - so it is validated like any untrusted input.
-        var validTarget = DnsName().IsMatch(proposal.Target);
+        var validTarget = proposal.Target.Length <= 253 && DnsName().IsMatch(proposal.Target);
         if (!Check("target", validTarget, validTarget ? $"'{proposal.Target}' is one object name" : $"'{proposal.Target}' is not ONE Kubernetes object name")) return (false, mode, checks);
 
         // 3. Runtime kill switch - checked on every action, never cached.

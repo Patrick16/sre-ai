@@ -16,7 +16,7 @@ function Invoke-Checked([scriptblock]$Command, [string]$What) {
     if ($LASTEXITCODE -ne 0) { throw "$What failed" }
 }
 
-Invoke-Checked { kubectl apply -f (Join-Path $platform 'namespace-sandbox.yaml') -f (Join-Path $platform 'namespace-monitoring.yaml') } 'namespaces'
+Invoke-Checked { kubectl apply -f (Join-Path $platform 'namespace-sandbox.yaml') -f (Join-Path $platform 'namespace-monitoring.yaml') -f (Join-Path $platform 'namespace-sre-agent.yaml') -f (Join-Path $platform 'namespace-chaos-mesh.yaml') } 'namespaces'
 # Default-deny + DNS for the app namespaces; each app chart adds its own allow rules.
 Invoke-Checked { kubectl apply -f (Join-Path $platform 'networkpolicy-baseline.yaml') } 'network policy baseline'
 # Phase 8: the API server limits what the agent's ServiceAccount may change (only restarts and Deployment-pod deletes).

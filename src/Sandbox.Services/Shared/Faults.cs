@@ -76,11 +76,18 @@ internal sealed class MemoryLeak(IOptionsMonitor<FaultOptions> options) : Backgr
     protected override async Task ExecuteAsync(CancellationToken ct)
     {
         using var timer = new PeriodicTimer(TimeSpan.FromSeconds(6));
+        var carry = 0.0;
         while (await timer.WaitForNextTickAsync(ct))
         {
             // 1/10 of the per-minute amount every 6 s: a steady ramp on the memory graph, not a step.
+            // Whole megabytes only, but the remainder is carried to the next tick (rounding every tick UP made
+            // 5 MB/min leak 10 MB/min).
             var mb = options.CurrentValue.LeakMbPerMinute / 10.0;
-            for (var i = 0; i < (int)Math.Ceiling(mb) && mb > 0; i++) LeakOneChunk();
+            if (mb <= 0) { carry = 0; continue; }
+            carry += mb;
+            var whole = (int)carry;
+            carry -= whole;
+            for (var i = 0; i < whole; i++) LeakOneChunk();
         }
     }
 

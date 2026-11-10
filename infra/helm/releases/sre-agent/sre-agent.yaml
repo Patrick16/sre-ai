@@ -5,7 +5,7 @@ replicas: 1
 
 image:
   repository: sre-agent/host
-  tag: "0.5.2"   # 0.2.x: observe-only; 0.3.x: facts + synthesis; 0.4.x: actions + guardrails; 0.5.0: incidents, steady state incl. pods; 0.5.1: latency in Retrieve; 0.5.2: age of last termination
+  tag: "0.5.3"   # 0.5.3: review fixes (docs/code-review-2026-11-10.md); 0.2.x: observe-only; 0.3.x: facts + synthesis; 0.4.x: actions + guardrails; 0.5.0: incidents, steady state incl. pods; 0.5.1: latency in Retrieve; 0.5.2: age of last termination
 
 # The agent talks to the Kubernetes API, so it needs a token. Rights = read in sandbox + exactly what the two actions
 # need. RBAC can't say "only this annotation" - patch on deployments would also allow scaling - so the admission
@@ -51,6 +51,10 @@ configEnv:
   # An 8-minute outage + ~5 minutes for the 5m SLI window to cool down doesn't fit into 6 iterations of
   # ~1.5 min + 60 s backoff: the first end-to-end test ended LimitsExhausted one iteration short.
   Agent__Limits__MaxIterations: "10"
+  Agent__AlertSuppressionMinutes: "240"   # a still-firing alert (Alertmanager repeats it hourly) starts no second run for 4 h
+  Agent__StateRetentionDays: "14"         # old RunState files are deleted at startup (reports/audit stay)
+  # Agent__ApiToken: shared secret (header X-Agent-Token) for POST /runs and POST /approvals - off by default; to turn
+  # it on put it in a Secret and use `secretEnv` (never in configEnv: that is a plain ConfigMap). See docs/17.
   Llm__BaseUrl: "http://host.docker.internal:1234/v1"   # LM Studio on the Windows host
   Llm__Model: "qwen/qwen3.5-9b"
   Llm__AllowedModels__0: "qwen/qwen3.5-9b"
@@ -69,11 +73,15 @@ configEnv:
   Actions__VerifyDelaySeconds: "90"
 
 networkPolicy:
-  allowFromNamespaces: [monitoring]                 # Alertmanager's webhook
+  # Only Alertmanager's pod, not the whole (privileged) monitoring namespace: the API has POST /approvals and POST /runs.
+  allowFromPods:
+    - { namespace: monitoring, app: alertmanager }
   allowToNamespaces:
     - { namespace: monitoring, port: 9090 }         # Prometheus
     - { namespace: monitoring, port: 3100 }         # Loki
     - { namespace: monitoring, port: 9093 }         # Alertmanager API
+  # These two addresses are specific to kind on Docker Desktop. scripts/check-network-assumptions.ps1 compares them with
+  # the real ones (the kind network and host.docker.internal) and tells you what to change if your Docker differs.
   allowToCidrs:
     - { cidr: 172.18.0.0/16, port: 6443 }           # kube-apiserver (kind's node network; Service 10.96.0.1:443 after DNAT)
     - { cidr: 192.168.65.254/32, port: 1234 }       # LM Studio via host.docker.internal (Docker Desktop's host gateway)

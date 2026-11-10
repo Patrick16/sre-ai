@@ -176,4 +176,20 @@ public class RalphLoopTests
 
         Assert.Equal(RunOutcome.Resolved, run.Outcome);   // the cluster recovered; that's what counts
     }
+
+    [Fact]
+    public async Task A_failing_completion_check_means_not_done_yet_instead_of_ending_the_run()
+    {
+        var model = new ScriptedChatClient(
+            ScriptedChatClient.Final(ScriptedChatClient.Json("postgres is down")),
+            ScriptedChatClient.Final(ScriptedChatClient.Json("postgres is back")));
+        var (loop, _, states, _) = Build(model, new FlakyCompletion(failIteration: 1, doneIteration: 2));
+
+        var run = await loop.RunAsync(TestTasks.Create(maxIterations: 5), null, CancellationToken.None);
+
+        Assert.Equal(RunOutcome.Resolved, run.Outcome);            // the second check worked: the run was not killed by the first
+        Assert.StartsWith("cannot check", run.Iterations[0].Completion.Reason);
+        Assert.False(run.Iterations[0].Completion.Done);
+        Assert.Equal(2, states.Saves);                              // the first iteration's result was kept
+    }
 }

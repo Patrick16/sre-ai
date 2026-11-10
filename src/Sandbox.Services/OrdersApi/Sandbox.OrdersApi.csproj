@@ -13,6 +13,15 @@
     <PackageReference Include="OpenTelemetry.Extensions.Hosting" Version="1.20.1" />
   </ItemGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="SreAgent.Host.Tests" />
+  </ItemGroup>
+
+  <!-- Local-run credentials (dev-key / dev-password) must never be shipped in the image. -->
+  <ItemGroup>
+    <Content Update="appsettings.Development.json" CopyToPublishDirectory="Never" />
+  </ItemGroup>
+
   <!-- Phase 9: the fault modes shared by all sandbox services (one file, compiled into each). -->
   <ItemGroup>
     <Compile Include="../Shared/*.cs" Link="Shared/%(Filename)%(Extension)" />

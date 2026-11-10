@@ -168,13 +168,17 @@ public sealed class AlertsResolvedCompletionCheck(AlertmanagerClient alertmanage
 
         var (restarts, rError) = await prometheus.QueryAsync(
             $"sum by (pod) (increase(kube_pod_container_status_restarts_total{{namespace=\"{task.Namespace}\"}}[5m])) > 0", ct);
-        if (rError is null && restarts.Count > 0)
+        if (rError is not null)
+            return new CompletionStatus(false, $"cannot read container restarts from Prometheus: {rError}");
+        if (restarts.Count > 0)
             return new CompletionStatus(false, $"SLIs within budget, but containers restarted in the last 5m: {string.Join(", ", restarts.Select(r => $"{r.Labels.GetValueOrDefault("pod", "?")} x{r.Value:0}"))}");
         var (notReady, nError) = await prometheus.QueryAsync(
             // Only live pods: a Completed/terminated pod is "not ready" too, and that's fine.
             $"sum by (pod) (kube_pod_status_ready{{namespace=\"{task.Namespace}\", condition=\"false\"}} * on (namespace, pod) group_left () " +
             $"(kube_pod_status_phase{{namespace=\"{task.Namespace}\", phase=~\"Running|Pending\"}} == 1)) > 0", ct);
-        if (nError is null && notReady.Count > 0)
+        if (nError is not null)
+            return new CompletionStatus(false, $"cannot read pod readiness from Prometheus: {nError}");
+        if (notReady.Count > 0)
             return new CompletionStatus(false, $"SLIs within budget, but pods are not ready: {string.Join(", ", notReady.Select(r => r.Labels.GetValueOrDefault("pod", "?")))}");
 
         var lagging = active.Where(a => !triggers.Contains(a.Name)).Select(a => a.Name).Distinct().ToList();

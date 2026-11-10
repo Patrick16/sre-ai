@@ -19,13 +19,16 @@ public sealed class RalphLoop(
     {
         var run = new AgentRun(task, time.GetUtcNow());
         var deadline = run.StartedAt + task.Limits.MaxWallTime;
-        var state = await states.LoadAsync(task.Id, ct) ?? new RunState { RunId = task.Id };
-        await audit.WriteAsync(new AuditEvent(run.StartedAt, task.Id, 0, "run.started",
-            new { trigger = task.Trigger.Kind.ToString(), alerts = task.Trigger.Alerts.Select(a => a.Name), task.Goal }), ct);
+        var state = new RunState { RunId = task.Id };
 
         var consecutiveFailures = 0;
         try
         {
+            // Inside the try: a disk/PVC error here must end THIS run as Failed, not crash the worker.
+            state = await states.LoadAsync(task.Id, ct) ?? state;
+            await audit.WriteAsync(new AuditEvent(run.StartedAt, task.Id, 0, "run.started",
+                new { trigger = task.Trigger.Kind.ToString(), alerts = task.Trigger.Alerts.Select(a => a.Name), task.Goal }), ct);
+
             for (var i = state.History.Count + 1; i <= task.Limits.MaxIterations; i++)
             {
                 if (time.GetUtcNow() >= deadline)
@@ -53,7 +56,18 @@ public sealed class RalphLoop(
                 }
 
                 // F - Feedback: "done" is decided here, by code, from the cluster's state - not by the model.
-                var status = await completion.CheckAsync(task, i, ct);
+                CompletionStatus status;
+                try
+                {
+                    status = await completion.CheckAsync(task, i, ct);
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException || !ct.IsCancellationRequested)
+                {
+                    // A blip in Prometheus/Alertmanager must not end the run (and must not lose this iteration's
+                    // result, e.g. an executed action): "cannot check" means "not done yet", try again next time.
+                    log.LogWarning(ex, "Run {RunId} iteration {Iteration}: the completion check failed", task.Id, i);
+                    status = new CompletionStatus(false, $"cannot check: {ex.GetType().Name}: {ex.Message}");
+                }
                 result = result with { Completion = status };
                 run.Iterations.Add(result);
                 state.Append(result);

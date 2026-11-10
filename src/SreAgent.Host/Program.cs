@@ -23,7 +23,11 @@ builder.Services.AddSingleton<OpenAiCompatibleChatClientFactory>();
 builder.Services.AddSingleton<IChatClientFactory>(sp => sp.GetRequiredService<OpenAiCompatibleChatClientFactory>());
 builder.Services.AddSingleton<IAuditLog>(sp => new FileAuditLog(Path.Combine(sp.GetRequiredService<IOptions<AgentOptions>>().Value.DataDir, "audit")));
 builder.Services.AddSingleton<IRunStateStore>(sp => new FileRunStateStore(Path.Combine(sp.GetRequiredService<IOptions<AgentOptions>>().Value.DataDir, "state")));
-builder.Services.AddSingleton(sp => new MarkdownReportWriter(Path.Combine(sp.GetRequiredService<IOptions<AgentOptions>>().Value.DataDir, "reports")));
+builder.Services.AddSingleton(sp =>
+{
+    var o = sp.GetRequiredService<IOptions<AgentOptions>>().Value;
+    return new MarkdownReportWriter(Path.Combine(o.DataDir, "reports"), o.Language);
+});
 
 // Actions: only when at least one type is allowlisted; otherwise ActionLead isn't registered and the agent observes.
 var actions = builder.Configuration.GetSection(ActionsOptions.Section).Get<ActionsOptions>() ?? new ActionsOptions();
@@ -54,6 +58,13 @@ builder.Services.AddOpenTelemetry()
 
 var app = builder.Build();
 
+// RunState files of old runs are only diagnostics (a run is never resumed): don't let them pile up on the PVC.
+{
+    var o = app.Services.GetRequiredService<IOptions<AgentOptions>>().Value;
+    var removed = DataRetention.PruneOldFiles(Path.Combine(o.DataDir, "state"), TimeSpan.FromDays(o.StateRetentionDays), DateTime.UtcNow);
+    if (removed > 0) app.Logger.LogInformation("Removed {Count} RunState file(s) older than {Days} days", removed, o.StateRetentionDays);
+}
+
 app.UseOpenTelemetryPrometheusScrapingEndpoint(ctx => ctx.Connection.LocalPort == 9090 && ctx.Request.Path == "/metrics");
 app.MapHealthChecks("/health/live");
 app.MapHealthChecks("/health/ready");
@@ -65,6 +76,7 @@ app.MapPost("/webhooks/alertmanager", (AlertmanagerWebhook payload, AlertInbox i
     foreach (var alert in payload.Alerts)
     {
         inbox.Add(alert);
+        if (alert.Status == "resolved") queue.ForgetHandled(alert.Fingerprint);
         metrics.AlertReceived(alert.Status, alert.Label("alertname"));
         logger.LogWarning("Alert {Status} {AlertName} severity={Severity} namespace={Namespace} summary={Summary}",
             alert.Status, alert.Label("alertname"), alert.Label("severity"), alert.Label("namespace"), alert.Annotations.GetValueOrDefault("summary"));
@@ -77,8 +89,19 @@ app.MapPost("/webhooks/alertmanager", (AlertmanagerWebhook payload, AlertInbox i
         .ToList();
     if (firing.Count == 0) return Results.Ok(new { started = false, reason = "no firing alert of the agent's namespace/severities" });
 
+    var fingerprints = firing.Select(a => a.Fingerprint).ToList();
+    if (queue.AlreadyHandled(fingerprints))
+    {
+        metrics.Deduplicated();
+        return Results.Ok(new { started = false, reason = $"these alerts already started a run within the last {o.AlertSuppressionMinutes} min (still firing: Alertmanager's repeat)" });
+    }
+
     var task = queue.NewTask(new TriggerEvent(TriggerKind.Alert, firing, null, time.GetUtcNow()), Goals.ForAlerts(o.Namespace, firing));
-    if (queue.TryEnqueue(new RunRequest(task, null))) return Results.Ok(new { started = true, runId = task.Id });
+    if (queue.TryEnqueue(new RunRequest(task, null)))
+    {
+        queue.RememberHandled(fingerprints);
+        return Results.Ok(new { started = true, runId = task.Id });
+    }
 
     metrics.Deduplicated();
     return Results.Ok(new { started = false, reason = $"run {queue.ActiveRunFor(o.Namespace)} is already looking at {o.Namespace}" });
@@ -87,8 +110,9 @@ app.MapPost("/webhooks/alertmanager", (AlertmanagerWebhook payload, AlertInbox i
 // Manual run: POST /runs  {"goal": "...", "model": "qwen/qwen3.5-9b"}  (both optional) - a one-iteration health check.
 // Incident:   POST /runs  {"incident": true, "note": "users report errors on the site"} - works until steady state,
 //             like an alert run (Phase 9: game days declare incidents instead of waiting 10-30 min for a burn-rate page).
-app.MapPost("/runs", (ManualRun? body, RunQueue queue, OpenAiCompatibleChatClientFactory llm, IOptions<AgentOptions> options, TimeProvider time) =>
+app.MapPost("/runs", (HttpContext http, ManualRun? body, RunQueue queue, OpenAiCompatibleChatClientFactory llm, IOptions<AgentOptions> options, TimeProvider time) =>
 {
+    if (!ApiToken.IsValid(options.Value.ApiToken, http.Request.Headers[ApiToken.Header])) return Results.Unauthorized();
     var ns = options.Value.Namespace;
     if (body?.Model is { Length: > 0 } m && !llm.Models.Contains(m, StringComparer.OrdinalIgnoreCase))
         return Results.BadRequest(new { error = $"model '{m}' is not allowed", allowed = llm.Models });
@@ -116,8 +140,9 @@ app.MapGet("/actions", (IServiceProvider sp) => sp.GetService<ActionSettings>() 
     ? Results.Ok(new { s.Enabled, mode = s.Mode.ToString(), allowed = s.Allowed.ToDictionary(kv => kv.Key, kv => s.EffectiveMode(kv.Key).ToString()), s.MaxPerRun, s.MaxPerWindow, window = s.Window.ToString(), cooldown = s.Cooldown.ToString() })
     : Results.Ok(new { enabled = false, reason = "no action is allowlisted (Actions__Allowed__*): observe-only" }));
 app.MapGet("/approvals", (ApprovalGate gate) => gate.Pending());
-app.MapPost("/approvals/{id}", (string id, ApprovalBody body, ApprovalGate gate, ILogger<ApprovalGate> logger) =>
+app.MapPost("/approvals/{id}", (HttpContext http, string id, ApprovalBody body, ApprovalGate gate, IOptions<AgentOptions> options, ILogger<ApprovalGate> logger) =>
 {
+    if (!ApiToken.IsValid(options.Value.ApiToken, http.Request.Headers[ApiToken.Header])) return Results.Unauthorized();
     if (string.IsNullOrWhiteSpace(body.By)) return Results.BadRequest(new { error = "\"by\" (who decides) is required - it goes to the audit log" });
     if (!gate.Decide(id, body.Approve, body.By)) return Results.NotFound(new { error = $"no pending approval '{id}' (expired or decided)" });
     logger.LogWarning("Approval {Id}: {Decision} by {By}", id, body.Approve ? "approved" : "rejected", body.By);

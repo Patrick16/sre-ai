@@ -121,6 +121,15 @@
         "enabled": { "type": "boolean" },
         "allowFromApps": { "type": "array", "items": { "type": "string" } },
         "allowFromNamespaces": { "type": "array", "items": { "type": "string" } },
+        "allowFromPods": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["namespace", "app"],
+            "properties": { "namespace": { "type": "string" }, "app": { "type": "string" } }
+          }
+        },
         "allowToApps": {
           "type": "array",
           "items": {

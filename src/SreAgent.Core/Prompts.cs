@@ -97,6 +97,13 @@ public static class Prompts
         return sb.ToString();
     }
 
+    /// <summary>
+    /// Log lines and earlier model text are untrusted: a line containing the data delimiters could "close" the DATA
+    /// block and make the rest look like instructions. The delimiters are defused wherever they appear inside data.
+    /// </summary>
+    public static string Neutralize(string data) =>
+        data.Replace("DATA>>>", "DATA >>>", StringComparison.Ordinal).Replace("<<<DATA", "<<< DATA", StringComparison.Ordinal);
+
     public static string UserMessage(TaskSpec task, RunState state, string observations, int iteration)
     {
         var sb = new StringBuilder();
@@ -107,11 +114,11 @@ public static class Prompts
         sb.AppendLine("the run state below is everything remembered from earlier iterations.");
         sb.AppendLine();
         sb.AppendLine("# Run state");
-        sb.AppendLine(state.ToPromptText());
+        sb.AppendLine(Neutralize(state.ToPromptText()));
         sb.AppendLine();
         sb.AppendLine("# Observations (collected automatically just now)");
         sb.AppendLine("<<<DATA");
-        sb.AppendLine(observations);
+        sb.AppendLine(Neutralize(observations));
         sb.AppendLine("DATA>>>");
         sb.AppendLine();
         sb.AppendLine("Investigate if needed, then answer with the JSON object only.");

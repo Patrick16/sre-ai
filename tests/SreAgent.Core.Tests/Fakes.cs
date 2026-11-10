@@ -66,6 +66,14 @@ internal sealed class ScriptedCompletion(params bool[] doneByIteration) : ICompl
     }
 }
 
+/// <summary>Fails on the given iterations (1-based) like Prometheus/Alertmanager having a bad moment; otherwise done on the last given.</summary>
+internal sealed class FlakyCompletion(int failIteration, int doneIteration) : ICompletionCheck
+{
+    public Task<CompletionStatus> CheckAsync(TaskSpec task, int iteration, CancellationToken ct) =>
+        iteration == failIteration ? throw new HttpRequestException("alertmanager returned 503")
+        : Task.FromResult(new CompletionStatus(iteration >= doneIteration, "scripted"));
+}
+
 internal sealed class MemoryAudit : IAuditLog
 {
     public List<AuditEvent> Events { get; } = [];

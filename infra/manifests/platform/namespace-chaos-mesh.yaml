@@ -1,0 +1,9 @@
+# Phase 9: Chaos Mesh. chaos-daemon is a privileged DaemonSet (it enters other pods' network and cgroup
+# namespaces to inject delays/stress) - infrastructure only, like monitoring.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: chaos-mesh
+  labels:
+    pod-security.kubernetes.io/enforce: privileged
+    pod-security.kubernetes.io/warn: baseline

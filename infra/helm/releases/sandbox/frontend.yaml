@@ -3,7 +3,7 @@ replicas: 2
 
 image:
   repository: sandbox/frontend
-  tag: "0.4.0"   # 0.3.0: OpenTelemetry metrics on :9090, JSON logs; 0.4.0: fault modes (Phase 9)
+  tag: "0.4.1"   # 0.4.1: 504 on a dependency timeout, leak rounding fix; 0.3.0: OpenTelemetry metrics on :9090, JSON logs; 0.4.0: fault modes (Phase 9)
 
 # The user-facing SLO: includes the time frontend waits for orders-api.
 slo:

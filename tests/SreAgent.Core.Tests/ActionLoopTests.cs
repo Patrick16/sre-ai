@@ -10,7 +10,7 @@ public class ActionLoopTests
     private sealed record Harness(RalphLoop Loop, FakeExecutor Executor, FakeApprovals Approvals, MemoryAudit Audit, ScriptedChatClient Model);
 
     private static Harness Build(ScriptedChatClient model, ICompletionCheck completion, ActionSettings settings,
-        FakeProbe? probe = null, ApprovalDecision? decision = null, FakeExecutor? executor = null)
+        IHealthProbe? probe = null, ApprovalDecision? decision = null, FakeExecutor? executor = null)
     {
         var audit = new MemoryAudit();
         executor ??= new FakeExecutor();
@@ -140,5 +140,44 @@ public class ActionLoopTests
         var instructions = h.Model.Options[0]?.Instructions ?? string.Join("\n", h.Model.Requests[0].Where(m => m.Role == ChatRole.System).Select(m => m.Text));
         Assert.Contains("restart_deployment (mode Approve)", instructions);
         Assert.Contains("delete_pod (mode Approve)", instructions);
+    }
+
+    [Fact]
+    public async Task An_executed_action_is_kept_even_if_verifying_its_effect_fails()
+    {
+        var h = Build(Model(ProposeRestart), new ScriptedCompletion(true), ActionTest.Settings(), new ProbeThatFailsAfterFirst());
+
+        var run = await h.Loop.RunAsync(TestTasks.Create(), null, CancellationToken.None);
+
+        var action = Assert.Single(run.Actions);                    // it happened, so it is in the record (and the report)
+        Assert.Equal(ActionStatus.Executed, action.Status);
+        Assert.Equal(ActionEffect.NotMeasured, action.Effect);
+        Assert.Contains("could not be verified", action.Detail);
+        Assert.Contains(h.Audit.Events, e => e.Event == "action.verify_failed");
+    }
+
+    [Fact]
+    public async Task A_failure_in_the_guardrails_keeps_the_analysis_and_records_a_failed_action()
+    {
+        var executor = new FakeExecutor { ThrowOnPrecondition = new HttpRequestException("api server 500") };
+        var h = Build(Model(ProposeRestart), new ScriptedCompletion(true), ActionTest.Settings(), executor: executor);
+
+        var run = await h.Loop.RunAsync(TestTasks.Create(), null, CancellationToken.None);
+
+        Assert.Equal("stale connection pool", run.Iterations[0].Analysis.Hypothesis);   // not replaced by "iteration failed"
+        Assert.Equal(ActionStatus.Failed, Assert.Single(run.Actions).Status);
+        Assert.Empty(executor.Calls);                                                    // nothing was sent to the cluster
+    }
+
+    [Fact]
+    public async Task A_target_name_longer_than_a_kubernetes_name_is_refused()
+    {
+        var long_ = new string('a', 254);
+        var h = Build(Model(ActionTest.JsonWithAction("x", ActionCatalog.RestartDeployment, long_)), new ScriptedCompletion(true), ActionTest.Settings());
+
+        var run = await h.Loop.RunAsync(TestTasks.Create(), null, CancellationToken.None);
+
+        Assert.Equal(ActionStatus.Refused, Assert.Single(run.Actions).Status);
+        Assert.Empty(h.Executor.Calls);
     }
 }

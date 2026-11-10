@@ -29,6 +29,18 @@ spec:
       expression: "has(object.spec.template.metadata.annotations) ? object.spec.template.metadata.annotations : {}"
     - name: oldAnn
       expression: "has(oldObject.spec.template.metadata.annotations) ? oldObject.spec.template.metadata.annotations : {}"
+    - name: newTplLabels
+      expression: "has(object.spec.template.metadata.labels) ? object.spec.template.metadata.labels : {}"
+    - name: oldTplLabels
+      expression: "has(oldObject.spec.template.metadata.labels) ? oldObject.spec.template.metadata.labels : {}"
+    - name: newLabels
+      expression: "has(object.metadata.labels) ? object.metadata.labels : {}"
+    - name: oldLabels
+      expression: "has(oldObject.metadata.labels) ? oldObject.metadata.labels : {}"
+    - name: newFinalizers
+      expression: "has(object.metadata.finalizers) ? object.metadata.finalizers : []"
+    - name: oldFinalizers
+      expression: "has(oldObject.metadata.finalizers) ? oldObject.metadata.finalizers : []"
   validations:
     - expression: "object.spec.replicas == oldObject.spec.replicas"
       message: "sre-agent may not scale a Deployment (replicas belong to Helm)"
@@ -36,6 +48,20 @@ spec:
       message: "sre-agent may not change the pod spec (image, resources, probes...)"
     - expression: "object.spec.selector == oldObject.spec.selector && object.spec.strategy == oldObject.spec.strategy"
       message: "sre-agent may not change the selector or the rollout strategy"
+    # Every other field of the Deployment that a patch could touch. "has(a) == has(b) && (!has(a) || a == b)" means
+    # "equal, where 'not set' counts as a value" (an unset boolean is omitted from the object, so paused: true appears).
+    - expression: >-
+        has(object.spec.paused) == has(oldObject.spec.paused) && (!has(object.spec.paused) || object.spec.paused == oldObject.spec.paused)
+      message: "sre-agent may not pause or resume a Deployment (spec.paused would freeze every rollout)"
+    - expression: >-
+        has(object.spec.minReadySeconds) == has(oldObject.spec.minReadySeconds) && (!has(object.spec.minReadySeconds) || object.spec.minReadySeconds == oldObject.spec.minReadySeconds) &&
+        has(object.spec.revisionHistoryLimit) == has(oldObject.spec.revisionHistoryLimit) && (!has(object.spec.revisionHistoryLimit) || object.spec.revisionHistoryLimit == oldObject.spec.revisionHistoryLimit) &&
+        has(object.spec.progressDeadlineSeconds) == has(oldObject.spec.progressDeadlineSeconds) && (!has(object.spec.progressDeadlineSeconds) || object.spec.progressDeadlineSeconds == oldObject.spec.progressDeadlineSeconds)
+      message: "sre-agent may not change rollout tuning (minReadySeconds, revisionHistoryLimit, progressDeadlineSeconds)"
+    - expression: "variables.newTplLabels == variables.oldTplLabels && variables.newLabels == variables.oldLabels"
+      message: "sre-agent may not change labels (they decide which pods a Service, NetworkPolicy or selector matches)"
+    - expression: "variables.newFinalizers == variables.oldFinalizers"
+      message: "sre-agent may not add or remove finalizers (a finalizer can make a Deployment impossible to delete)"
     - expression: >-
         variables.newAnn.all(k, k == 'kubectl.kubernetes.io/restartedAt' || (k in variables.oldAnn && variables.oldAnn[k] == variables.newAnn[k])) &&
         variables.oldAnn.all(k, k == 'kubectl.kubernetes.io/restartedAt' || k in variables.newAnn)

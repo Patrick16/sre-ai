@@ -87,6 +87,7 @@ deployments` и `delete pods`; в `sre-agent` — `get` одного ConfigMap �
 | `replicas: 5` | ❌ «may not scale a Deployment» | admission policy |
 | сменить образ | ❌ «may not change the pod spec» | admission policy |
 | добавить другую аннотацию | ❌ «may only change … restartedAt» | admission policy |
+| `paused: true`, `minReadySeconds`, labels, finalizers | ❌ «may not pause / change rollout tuning / labels / finalizers» | admission policy (добавлено после ревью, проверено запросами от имени агента) |
 | удалить `postgres-0` | ❌ «only pods owned by a ReplicaSet» | admission policy |
 | `kubectl scale` (subresource `deployments/scale`) | ❌ Forbidden | RBAC |
 | удалить Deployment, читать secrets, патч в `monitoring`, другой ConfigMap | ❌ Forbidden | RBAC |
@@ -122,9 +123,13 @@ kubectl create configmap sre-agent-kill-switch -n sre-agent   # стоп все�
 kubectl delete configmap sre-agent-kill-switch -n sre-agent   # снова можно
 ```
 
-`by` обязателен: он попадает в audit и отчёт. Подтверждать может любой, кто дотянулся до API агента — в кластере это
-только через `port-forward`, т.е. люди с доступом к namespace `sre-agent`. В реальной системе тут была бы
-аутентификация или кнопка в чате.
+`by` обязателен: он попадает в audit и отчёт, но это просто строка, а не личность. Подтверждать может тот, кто дотянулся
+до API агента. После код-ревью 2026-11-10 таких мест два: `kubectl port-forward` (люди с доступом к namespace
+`sre-agent`) и **только под Alertmanager** (NetworkPolicy `allowFromPods`; раньше был открыт весь namespace
+`monitoring`). Дополнительно можно включить общий секрет: `Agent__ApiToken` (через `secretEnv`, не `configEnv`) — тогда
+`POST /runs` и `POST /approvals/{id}` требуют заголовок `X-Agent-Token` (скрипт `game-day.ps1` берёт его из
+`$env:SRE_AGENT_TOKEN`). По умолчанию токен выключен — без него защищает только сеть. В реальной системе тут была бы
+настоящая аутентификация или кнопка в чате.
 
 ## Что показала проверка
 
@@ -171,8 +176,12 @@ restart без простоя. Но действие было впустую, и
 - **Каждая проверка в отчёте**: раздел «Действия» перечисляет все 11 проверок с ✅/❌ и деталями — из записи, не из
   текста модели. Первая версия печатала у пройденных проверок текст отказа («acting has stopped helping…») —
   исправлено: у каждой проверки свой текст для «да» и «нет».
-- 53 теста: каждый слой «разрешает правильное / запрещает неправильное», режимы, Escalated при Degraded, повтор
-  бесполезного, модель не знает о действиях, если их нет.
+- 59 тестов в `SreAgent.Core.Tests` и 63 в `SreAgent.Host.Tests`. Исходно было 53 (каждый слой «разрешает правильное /
+  запрещает неправильное», режимы, Escalated при Degraded, повтор бесполезного, модель не знает о действиях, если их
+  нет). После код-ревью добавлено: выполненное действие не теряется, если проверка эффекта упала; сбой guardrails не
+  стирает анализ; слишком длинное имя цели отклоняется; сбой completion check ≠ конец прогона; строка лога не
+  закрывает блок данных. Новый проект `Host.Tests`: очередь, дедупликация алертов, токен, ledger, отчёт,
+  Prometheus-клиент, completion check, область PromQL/LogQL, правила заказов.
 
 ## Упражнения
 
@@ -188,7 +197,11 @@ restart без простоя. Но действие было впустую, и
 
 ## Ограничения
 
-- Подтверждение — HTTP без аутентификации, за `port-forward`.
+- Подтверждение — HTTP: по умолчанию без аутентификации (только NetworkPolicy и `port-forward`); есть опциональный
+  общий токен `Agent__ApiToken`, но не настоящая идентичность пользователя.
+- Ошибка **после** выполненного действия (Prometheus недоступен при проверке эффекта, остановка агента) не стирает
+  действие: оно остаётся в `RunState` и отчёте с эффектом `NotMeasured` (раньше итерация заменялась на «failed», и
+  отчёт писал «Actions: none»).
 - Эффект меряется одним снимком через 90 с; медленные эффекты (утечка памяти за час) он не увидит, а естественное
   восстановление выдаёт за `Improved` (п.3 выше).
 - «Нет прогресса» (итерации без новых фактов) не эскалирует — модель ждёт восстановления базы, и это нормально;

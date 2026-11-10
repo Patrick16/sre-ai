@@ -83,14 +83,36 @@ public sealed class ActionLead(Guardrails guardrails, IActionExecutor executor, 
             return new ActionRecord(iteration, at, p, mode, ActionStatus.Failed, ex.Message, checks, before, ApprovedBy: approvedBy);
         }
         // Recorded right away: if the agent dies while waiting, the rate limit still counts this action.
-        await guardrails.RecordExecutedAsync(time.GetUtcNow(), ActionRecord.ActionKey(p.Type, p.Target), ct);
+        try
+        {
+            await guardrails.RecordExecutedAsync(time.GetUtcNow(), ActionRecord.ActionKey(p.Type, p.Target), ct);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            // The action already happened; a full disk must not make the run forget it (RunState still has it).
+            log.LogError(ex, "Could not record the executed action {Type} {Target} in the ledger", p.Type, p.Target);
+        }
         log.LogWarning("Action executed: {Type} {Target} ({Detail})", p.Type, p.Target, detail);
 
         // F - did it help? Wait for the rollout and the metric windows, then compare.
-        await Task.Delay(Settings.VerifyDelay, time, ct);
-        var after = await probe.SnapshotAsync(task.Namespace, ct);
-        var effect = EffectJudge.Judge(before, after);
-        await Audit(task, iteration, "action.verified", new { p.Type, p.Target, before, after, effect = effect.ToString() }, ct);
+        // The action HAS happened. Whatever goes wrong from here (Prometheus down, agent shutting down) must not
+        // erase it from RunState and the report, so the verification is best-effort: effect = NotMeasured.
+        HealthSnapshot? after = null;
+        var effect = ActionEffect.NotMeasured;
+        try
+        {
+            await Task.Delay(Settings.VerifyDelay, time, ct);
+            after = await probe.SnapshotAsync(task.Namespace, ct);
+            effect = EffectJudge.Judge(before, after);
+            await Audit(task, iteration, "action.verified", new { p.Type, p.Target, before, after, effect = effect.ToString() }, ct);
+        }
+        catch (Exception ex)
+        {
+            log.LogWarning(ex, "Action {Type} {Target} was executed but its effect could not be verified", p.Type, p.Target);
+            try { await Audit(task, iteration, "action.verify_failed", new { p.Type, p.Target, error = $"{ex.GetType().Name}: {ex.Message}" }, CancellationToken.None); }
+            catch (Exception auditEx) { log.LogError(auditEx, "Could not audit the failed verification"); }
+            detail += $" (effect could not be verified: {ex.GetType().Name}: {ex.Message})";
+        }
         return new ActionRecord(iteration, at, p, mode, ActionStatus.Executed, detail, checks, before, after, effect, approvedBy);
     }
 

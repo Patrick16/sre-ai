@@ -8,13 +8,3 @@ metadata:
     # Keep it for infrastructure only; never run apps here.
     pod-security.kubernetes.io/enforce: privileged
     pod-security.kubernetes.io/warn: baseline
----
-apiVersion: v1
-kind: Namespace
-metadata:
-  name: sre-agent
-  annotations:
-    linkerd.io/inject: enabled
-  labels:
-    pod-security.kubernetes.io/enforce: restricted
-    pod-security.kubernetes.io/warn: restricted

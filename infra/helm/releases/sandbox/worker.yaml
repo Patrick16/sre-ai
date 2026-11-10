@@ -3,7 +3,7 @@ replicas: 1
 
 image:
   repository: sandbox/worker
-  tag: "0.4.0"   # 0.3.0: OpenTelemetry metrics on :9090, JSON logs; 0.4.0: fault modes (Phase 9)
+  tag: "0.4.1"   # 0.4.1: any polling error is survived, heartbeat per order, leak rounding fix; 0.3.0: OpenTelemetry metrics on :9090, JSON logs; 0.4.0: fault modes (Phase 9)
 
 service:
   enabled: false   # nobody calls the worker

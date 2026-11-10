@@ -34,6 +34,7 @@ builder.Services.AddSingleton(sp =>
 builder.Services.AddSingleton<OrderStore>();
 builder.Services.AddSingleton<ApiKeyValidator>();
 builder.Services.AddSingleton<Ballast>();
+builder.Services.AddHostedService<OrderRetention>();
 builder.Services.AddHealthChecks()
     .AddCheck<DatabaseHealthCheck>("database", tags: ["db"]);
 builder.Services.AddSingleton<OrdersMetrics>();
@@ -74,19 +75,29 @@ app.MapGet("/info", (IOptionsMonitor<OrdersOptions> options) => new
     banner = options.CurrentValue.Banner,
 });
 
+async ValueTask<object?> RequireApiKey(EndpointFilterInvocationContext ctx, EndpointFilterDelegate next)
+{
+    var validator = ctx.HttpContext.RequestServices.GetRequiredService<ApiKeyValidator>();
+    return validator.IsValid(ctx.HttpContext.Request.Headers["X-Api-Key"])
+        ? await next(ctx)
+        : Results.Unauthorized();
+}
+
 var orders = app.MapGroup("/orders")
-    .AddEndpointFilter(async (ctx, next) =>
-    {
-        var validator = ctx.HttpContext.RequestServices.GetRequiredService<ApiKeyValidator>();
-        return validator.IsValid(ctx.HttpContext.Request.Headers["X-Api-Key"])
-            ? await next(ctx)
-            : Results.Unauthorized();
-    })
+    .AddEndpointFilter(RequireApiKey)
     .AddEndpointFilter(async (ctx, next) =>
     {
         try
         {
             return await next(ctx);
+        }
+        catch (PostgresException ex) when (ex.SqlState is { } state && (state.StartsWith("22") || state.StartsWith("23")))
+        {
+            // Bad data (class 22) or a violated constraint (class 23) is the CLIENT's mistake, not an outage:
+            // answering 503 "database unavailable" burned the SLO and sent the on-call after a healthy database.
+            ctx.HttpContext.RequestServices.GetRequiredService<ILogger<OrderStore>>()
+                .LogWarning("Rejected by the database ({SqlState}): {Message}", ex.SqlState, ex.MessageText);
+            return Results.Problem("the database rejected the data", statusCode: StatusCodes.Status400BadRequest);
         }
         catch (Exception ex) when (ex is NpgsqlException or TimeoutException)
         {
@@ -98,9 +109,11 @@ var orders = app.MapGroup("/orders")
 
 orders.MapGet("/", (OrderStore store, string? status, CancellationToken ct) => store.ListAsync(status, ct));
 
-orders.MapPost("/", async (OrderStore store, OrdersMetrics metrics, NewOrder input, CancellationToken ct) =>
+orders.MapPost("/", async (OrderStore store, OrdersMetrics metrics, NewOrder? input, CancellationToken ct) =>
 {
-    var order = await store.AddAsync(input.Item, pod, ct);
+    if (OrderRules.Validate(input?.Item) is { } problem)
+        return Results.Problem(problem, statusCode: StatusCodes.Status400BadRequest);
+    var order = await store.AddAsync(input!.Item!.Trim(), pod, ct);
     metrics.Created.Add(1);
     return Results.Created($"/orders/{order.Id}", order);
 });
@@ -113,11 +126,31 @@ orders.MapPost("/{id:guid}/process", async (OrderStore store, OrdersMetrics metr
 });
 
 // Holds memory on purpose so the container can be pushed past its memory limit (OOMKilled exercise).
-app.MapPost("/debug/allocate", (Ballast ballast, int mb) => new { allocatedMb = ballast.Add(mb) });
+// Behind the API key like the rest (this path is reachable through the Ingress), and the size is bounded.
+app.MapGroup("/debug")
+    .AddEndpointFilter(RequireApiKey)
+    .MapPost("/allocate", (Ballast ballast, int mb) =>
+        mb is < 1 or > Ballast.MaxMbPerCall
+            ? Results.Problem($"mb must be between 1 and {Ballast.MaxMbPerCall}", statusCode: StatusCodes.Status400BadRequest)
+            : Results.Ok(new { allocatedMb = ballast.Add(mb) }));
 
 app.Run();
 
-record NewOrder(string Item);
+record NewOrder(string? Item);
+
+static class OrderRules
+{
+    public const int MaxItemLength = 200;
+
+    /// <returns>what is wrong with the item, or null when it is fine.</returns>
+    public static string? Validate(string? item) => item switch
+    {
+        null => "item is required",
+        _ when string.IsNullOrWhiteSpace(item) => "item must not be empty",
+        _ when item.Length > MaxItemLength => $"item must be at most {MaxItemLength} characters",
+        _ => null,
+    };
+}
 
 record Order(Guid Id, string Item, string Status, string CreatedByPod, DateTimeOffset CreatedAt);
 
@@ -138,6 +171,9 @@ class OrdersMetrics
 
 class OrdersOptions
 {
+    /// <summary>Processed orders older than this many hours are deleted (the load generator never stops creating them). 0 = keep all.</summary>
+    public int RetentionHours { get; set; }
+
     public string Banner { get; set; } = "default";
     public string ApiKeyFile { get; set; } = "/etc/orders-api/secret/api-key";
     public string? ApiKey { get; set; }
@@ -152,7 +188,9 @@ class OrderStore(NpgsqlDataSource db)
     public Task<List<Order>> ListAsync(string? status, CancellationToken ct) => WithSchemaAsync(async () =>
     {
         await using var cmd = status is null
-            ? db.CreateCommand($"SELECT {Columns} FROM orders ORDER BY created_at LIMIT 100")
+            // The list of everything shows the NEWEST orders (a page that always shows the first 100 ever created looks
+            // frozen); the worker's "pending" queue stays oldest-first (FIFO).
+            ? db.CreateCommand($"SELECT {Columns} FROM orders ORDER BY created_at DESC LIMIT 100")
             : db.CreateCommand($"SELECT {Columns} FROM orders WHERE status = $1 ORDER BY created_at LIMIT 100");
         if (status is not null) cmd.Parameters.Add(new() { Value = status.ToLowerInvariant() });
 
@@ -200,6 +238,14 @@ class OrderStore(NpgsqlDataSource db)
         }
     }
 
+    /// <returns>how many processed orders older than the cutoff were deleted.</returns>
+    public Task<int> DeleteProcessedOlderThanAsync(TimeSpan age, CancellationToken ct) => WithSchemaAsync(async () =>
+    {
+        await using var cmd = db.CreateCommand("DELETE FROM orders WHERE status = 'processed' AND created_at < now() - $1");
+        cmd.Parameters.Add(new() { Value = age });
+        return await cmd.ExecuteNonQueryAsync(ct);
+    }, ct);
+
     private static Order Read(NpgsqlDataReader r) =>
         new(r.GetGuid(0), r.GetString(1), r.GetString(2), r.GetString(3), r.GetFieldValue<DateTimeOffset>(4));
 
@@ -224,6 +270,7 @@ class OrderStore(NpgsqlDataSource db)
                     created_at     timestamptz NOT NULL DEFAULT now()
                 );
                 CREATE INDEX IF NOT EXISTS orders_status_idx ON orders (status);
+                CREATE INDEX IF NOT EXISTS orders_created_idx ON orders (created_at);
                 """, conn, tx);
             await cmd.ExecuteNonQueryAsync(ct);
             await tx.CommitAsync(ct);
@@ -232,6 +279,30 @@ class OrderStore(NpgsqlDataSource db)
         finally
         {
             _schemaLock.Release();
+        }
+    }
+}
+
+// Without this the database grows for ever (the load generator creates ~1 order a second) and the 1 Gi volume fills up
+// after a few weeks - PostgreSQL then stops accepting writes. Failures are logged, never fatal: it is housekeeping.
+class OrderRetention(OrderStore store, IOptionsMonitor<OrdersOptions> options, ILogger<OrderRetention> logger) : BackgroundService
+{
+    protected override async Task ExecuteAsync(CancellationToken ct)
+    {
+        using var timer = new PeriodicTimer(TimeSpan.FromMinutes(10));
+        while (await timer.WaitForNextTickAsync(ct))
+        {
+            var hours = options.CurrentValue.RetentionHours;
+            if (hours <= 0) continue;
+            try
+            {
+                var deleted = await store.DeleteProcessedOlderThanAsync(TimeSpan.FromHours(hours), ct);
+                if (deleted > 0) logger.LogInformation("Retention: deleted {Count} processed orders older than {Hours} h", deleted, hours);
+            }
+            catch (Exception ex) when (!ct.IsCancellationRequested)
+            {
+                logger.LogWarning("Retention run failed: {Type}: {Message}", ex.GetType().Name, ex.Message);
+            }
         }
     }
 }
@@ -271,6 +342,7 @@ class ApiKeyValidator(IOptionsMonitor<OrdersOptions> options)
 unsafe class Ballast
 {
     private const int ChunkSize = 1024 * 1024;
+    public const int MaxMbPerCall = 512;
     private int _allocatedMb;
 
     public int Add(int mb)

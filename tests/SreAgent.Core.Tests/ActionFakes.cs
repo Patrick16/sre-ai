@@ -7,8 +7,10 @@ internal sealed class FakeExecutor(string? precondition = null) : IActionExecuto
     public string? Precondition { get; set; } = precondition;
     public List<(ActionProposal Proposal, bool DryRun)> Calls { get; } = [];
     public Exception? Throw { get; set; }
+    public Exception? ThrowOnPrecondition { get; set; }
 
-    public Task<string?> CheckPreconditionsAsync(ActionProposal proposal, string ns, CancellationToken ct) => Task.FromResult(Precondition);
+    public Task<string?> CheckPreconditionsAsync(ActionProposal proposal, string ns, CancellationToken ct) =>
+        ThrowOnPrecondition is not null ? throw ThrowOnPrecondition : Task.FromResult(Precondition);
 
     public Task<string> ExecuteAsync(ActionProposal proposal, string ns, bool dryRun, CancellationToken ct)
     {
@@ -33,6 +35,16 @@ internal sealed class FakeProbe(params (double ErrorRatio, int NotReady)[] readi
         var (e, n) = _readings.Count > 0 ? _readings.Dequeue() : (0, 0);
         return Task.FromResult(new HealthSnapshot(DateTimeOffset.UtcNow, e, n));
     }
+}
+
+/// <summary>First reading fine, every later one fails: e.g. Prometheus goes away right after the action ran.</summary>
+internal sealed class ProbeThatFailsAfterFirst(double errorRatio = 0.5) : IHealthProbe
+{
+    private int _calls;
+    public Task<HealthSnapshot> SnapshotAsync(string ns, CancellationToken ct) =>
+        Interlocked.Increment(ref _calls) == 1
+            ? Task.FromResult(new HealthSnapshot(DateTimeOffset.UtcNow, errorRatio, 0))
+            : throw new HttpRequestException("prometheus is gone");
 }
 
 /// <summary>Always the same reading - e.g. "there is a symptom right now" for the guardrails' current-symptom check.</summary>

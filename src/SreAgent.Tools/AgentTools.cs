@@ -120,6 +120,7 @@ public sealed class AgentTools(IKubernetes kube, PrometheusClient prometheus, Lo
                  "request_total (Linkerd, labels deployment, direction, tls).")]
     public async Task<string> QueryMetricsAsync([Description("PromQL expression, e.g. sum by (app) (rate(http_server_request_duration_seconds_count{namespace=\"sandbox\"}[5m]))")] string promql, CancellationToken ct)
     {
+        _options.EnsurePromqlInScope(promql);
         var (samples, error) = await prometheus.QueryAsync(promql, ct);
         return error is null ? PrometheusClient.Format(samples) : $"query error: {error}";
     }
@@ -135,6 +136,11 @@ public sealed class AgentTools(IKubernetes kube, PrometheusClient prometheus, Lo
         CancellationToken ct = default)
     {
         _options.EnsureAllowed(@namespace);
+        // app and level end up inside a LogQL selector: refuse anything that is not a plain name / level list.
+        if (!string.IsNullOrWhiteSpace(app) && !ToolsOptions.IsPlainLabelValue(app))
+            return $"invalid app '{app}': use a plain service name such as orders-api";
+        if (!string.IsNullOrWhiteSpace(level) && !ToolsOptions.IsLevelRegex(level))
+            return $"invalid level '{level}': use level names separated by |, e.g. Warning|Error";
         var selector = new StringBuilder($"{{namespace=\"{@namespace}\"");
         if (!string.IsNullOrWhiteSpace(app)) selector.Append($", app=\"{app}\"");
         if (!string.IsNullOrWhiteSpace(level)) selector.Append($", level=~\"{level}\"");

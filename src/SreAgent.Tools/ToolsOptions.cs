@@ -1,6 +1,6 @@
 namespace SreAgent.Tools;
 
-public sealed class ToolsOptions
+public sealed partial class ToolsOptions
 {
     public const string Section = "Tools";
 
@@ -20,4 +20,37 @@ public sealed class ToolsOptions
         if (!Namespaces.Contains(ns, StringComparer.Ordinal))
             throw new ArgumentException($"namespace '{ns}' is outside the agent's scope; allowed: {string.Join(", ", Namespaces)}");
     }
+
+    /// <summary>
+    /// A PromQL query may only name allowed namespaces in its <c>namespace</c> matchers. Prometheus has no per-query
+    /// scoping, so this is a guard against the model wandering (or being talked into it by log text), not a security
+    /// boundary: a query WITHOUT a namespace matcher still sees every namespace's metrics (read-only).
+    /// </summary>
+    public void EnsurePromqlInScope(string promql)
+    {
+        foreach (System.Text.RegularExpressions.Match m in NamespaceMatcher().Matches(promql))
+        {
+            var op = m.Groups["op"].Value;
+            var value = m.Groups["value"].Value;
+            // For regex matchers every alternative must be allowed; != and !~ only exclude, they never widen the scope.
+            if (op is "!=" or "!~") continue;
+            var alternatives = op == "=~" ? value.Split('|') : [value];
+            foreach (var ns in alternatives) EnsureAllowed(ns);
+        }
+    }
+
+    [System.Text.RegularExpressions.GeneratedRegex(@"namespace\s*(?<op>=~|!~|!=|=)\s*""(?<value>[^""]*)""")]
+    private static partial System.Text.RegularExpressions.Regex NamespaceMatcher();
+
+    /// <summary>Label values go into LogQL: only plain names, so they cannot break out of the quotes.</summary>
+    public static bool IsPlainLabelValue(string value) => PlainLabel().IsMatch(value);
+
+    /// <summary>A regex of log levels such as "Warning|Error": letters and | only.</summary>
+    public static bool IsLevelRegex(string value) => LevelRegex().IsMatch(value);
+
+    [System.Text.RegularExpressions.GeneratedRegex("^[A-Za-z0-9._-]{1,63}$")]
+    private static partial System.Text.RegularExpressions.Regex PlainLabel();
+
+    [System.Text.RegularExpressions.GeneratedRegex(@"^[A-Za-z]+(\|[A-Za-z]+)*$")]
+    private static partial System.Text.RegularExpressions.Regex LevelRegex();
 }

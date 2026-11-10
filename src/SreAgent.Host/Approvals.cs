@@ -8,8 +8,9 @@ namespace SreAgent.Host;
 /// Approve mode: the proposal waits here until a human decides via the API, or the timeout passes (= no).
 ///   GET  /approvals                 pending proposals
 ///   POST /approvals/{id}  {"approve": true, "by": "alice"}
-/// Who may decide = who can reach the agent's API: in the cluster that's only via `kubectl port-forward`, i.e.
-/// people with access to the sre-agent namespace. A real setup would add authentication / a chat integration.
+/// Who may decide = who can reach the agent's API AND knows <c>Agent:ApiToken</c> (header X-Agent-Token; when the
+/// token is empty only the NetworkPolicy protects the API: Alertmanager's pod and `kubectl port-forward`).
+/// "by" is a free-text name for the audit log, not an identity. A real setup would add real authentication or a chat integration.
 /// </summary>
 public sealed class ApprovalGate(TimeProvider time) : IApprovalGate
 {
@@ -118,4 +119,41 @@ public sealed class ActionsOptions
         VerifyDelay = TimeSpan.FromSeconds(VerifyDelaySeconds),
         RequireCurrentSymptom = RequireCurrentSymptom,
     };
+}
+
+/// <summary>The shared secret of the endpoints that change something. Compared in constant time.</summary>
+public static class ApiToken
+{
+    public const string Header = "X-Agent-Token";
+
+    /// <summary>An empty configured token means "not required".</summary>
+    public static bool IsValid(string configured, string? supplied)
+    {
+        if (string.IsNullOrEmpty(configured)) return true;
+        if (string.IsNullOrEmpty(supplied)) return false;
+        return System.Security.Cryptography.CryptographicOperations.FixedTimeEquals(
+            System.Text.Encoding.UTF8.GetBytes(configured), System.Text.Encoding.UTF8.GetBytes(supplied));
+    }
+}
+
+/// <summary>Deletes old files from a directory (used for RunState files, which are only diagnostics).</summary>
+public static class DataRetention
+{
+    /// <returns>how many files were deleted; retention &lt;= 0 keeps everything.</returns>
+    public static int PruneOldFiles(string directory, TimeSpan retention, DateTime utcNow)
+    {
+        if (retention <= TimeSpan.Zero || !Directory.Exists(directory)) return 0;
+        var removed = 0;
+        foreach (var file in Directory.EnumerateFiles(directory, "*.json"))
+        {
+            try
+            {
+                if (utcNow - File.GetLastWriteTimeUtc(file) <= retention) continue;
+                File.Delete(file);
+                removed++;
+            }
+            catch (IOException) { } // in use or already gone: next startup
+        }
+        return removed;
+    }
 }

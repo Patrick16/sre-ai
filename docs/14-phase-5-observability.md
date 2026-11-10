@@ -7,7 +7,7 @@
 
 | Компонент | Версия / чарт | Namespace | Роль |
 |---|---|---|---|
-| kube-prometheus-stack | 93.0.0 | `monitoring` | Prometheus Operator, Prometheus (PVC 5Gi, retention 3d), Alertmanager, Grafana, node-exporter, kube-state-metrics, готовые правила и дашборды для Kubernetes |
+| kube-prometheus-stack | 93.0.0 | `monitoring` | Prometheus Operator, Prometheus (PVC 5Gi, retention 5d — дольше самого длинного окна SLO, 3d), Alertmanager, Grafana, node-exporter, kube-state-metrics, готовые правила и дашборды для Kubernetes |
 | Loki | grafana/loki 7.5.0, режим SingleBinary | `monitoring` | Хранилище логов (файлы на PVC, retention 72h) |
 | Grafana Alloy | grafana/alloy 1.15.0, DaemonSet | `monitoring` | Сбор логов `/var/log/pods` на каждой ноде → Loki |
 | [sandbox-observability](../infra/helm/sandbox-observability/) | наш чарт | `monitoring` | Дашборды как код |
@@ -143,7 +143,7 @@ Alertmanager слал webhook'и агенту, которого ещё не бы
 | 3 | `histogram_quantile(0.99, sum by (le) (rate(http_server_request_duration_seconds_bucket{app="orders-api"}[5m])))` | p99 из гистограммы; попробовать без `sum by (le)` — почему результат бессмысленный |
 | 4 | Grafana → Explore → Loki: `{namespace="sandbox", app="orders-api"} \| json \| LogLevel="Warning"` | Фильтрация структурных логов по полям |
 | 5 | Повторить сквозной сценарий: `helm upgrade postgres infra/helm/postgres -n sandbox -f infra/helm/releases/sandbox/postgres.yaml --set replicas=0`, через 5 минут `./scripts/deploy-apps.ps1 -Services postgres` | Таймлайн как в п.1; смотреть Alertmanager UI и логи `sre-agent` |
-| 6 | `POST /debug/allocate?mb=300` в под orders-api (Фаза 1) | `KubePodCrashLooping`/рестарты на дашборде, OOMKilled в kube-state-metrics |
+| 6 | `POST /debug/allocate?mb=300` (с `X-Api-Key`) в под orders-api (Фаза 1) | `KubePodCrashLooping`/рестарты на дашборде, OOMKilled в kube-state-metrics |
 | 7 | Создать Silence в Alertmanager UI на `PostgresDown` и повторить п.5 | Алерт горит в Prometheus, но не доходит до агента |
 | 8 | Убрать `or vector(0)` из шаблона SLO (локально, `helm template`) и подумать, что случится при 100% ошибок | Пустой результат → нет алерта |
 | 9 | Добавить `await Task.Delay(300)` в `GET /orders`, поднять тег в `orders-api.yaml` (например `0.3.2-slow`), `build-images` + `deploy-apps -Services orders-api`; потом откатить | Без единой 5xx сработает SLO — по латентности (порог 250 мс) |

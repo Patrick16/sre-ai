@@ -25,6 +25,16 @@ spec:
             matchLabels:
               kubernetes.io/metadata.name: {{ . }}
         {{- end }}
+        # One specific pod of another namespace (namespaceSelector AND podSelector in ONE element = both must match),
+        # narrower than "everything in that namespace".
+        {{- range $np.allowFromPods }}
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .namespace }}
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: {{ .app }}
+        {{- end }}
         # the `helm test` pod of this release
         - podSelector:
             matchLabels:

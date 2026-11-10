@@ -29,3 +29,5 @@ reports/*
 # OS
 Thumbs.db
 .DS_Store
+
+*repomix*
