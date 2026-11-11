@@ -44,6 +44,16 @@ foreach ($ns in 'sandbox', 'sre-agent') {
         if ($bare) { "FAIL: no proxy (run scripts/recover-mesh.ps1): $($bare.metadata.name -join ', ')" } else { 'linkerd-proxy in every pod' }
     }
 }
+Check 'mesh certificates' {
+    # A proxy renews its 24 h certificate at 70 % of its life, so a healthy one always has more than ~7 h left.
+    # Less = the renewal is overdue or the certificate has expired (host slept; see recover-mesh.ps1, case 3).
+    $live = @(kubectl get pods -A -o json | ConvertFrom-Json).items | % { "$($_.metadata.namespace)/$($_.metadata.name)" }
+    $all = @(Prom '(control_identity_cert_expiration_timestamp_seconds - time()) / 3600' | ? { "$($_.metric.namespace)/$($_.metric.pod)" -in $live })
+    $bad = $all | ? { [double]$_.value[1] -lt 7 }
+    if (-not $all) { 'FAIL: no control_identity_cert_expiration_timestamp_seconds series' }
+    elseif ($bad) { "FAIL: expired or overdue (run scripts/recover-mesh.ps1): $(($bad | % { '{0} {1:N1} h' -f $_.metric.pod, [double]$_.value[1] }) -join ', ')" }
+    else { '{0} proxies, the oldest has {1:N1} h left' -f $all.Count, ($all | % { [double]$_.value[1] } | Measure-Object -Minimum).Minimum }
+}
 
 Check 'site https://sandbox.localhost/' { $c = Curl 'https://sandbox.localhost/'; if ($c -ne '200') { "FAIL: HTTP $c" } else { 'HTTP 200 (frontend -> orders-api -> postgres)' } }
 Check 'api https://sandbox.localhost/api/info' { $c = Curl 'https://sandbox.localhost/api/info'; if ($c -ne '200') { "FAIL: HTTP $c" } else { 'HTTP 200' } }

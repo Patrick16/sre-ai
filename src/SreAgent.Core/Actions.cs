@@ -74,8 +74,11 @@ public sealed record ActionSettings
     /// <summary>Off switch in config; the kill switch (ConfigMap) is the runtime one.</summary>
     public bool Enabled { get; init; } = true;
 
-    /// <summary>Global ceiling: no action can be more autonomous than this. Default: describe only.</summary>
-    public ActionMode Mode { get; init; } = ActionMode.DryRun;
+    /// <summary>
+    /// Global ceiling: no action can be more autonomous than this. Default: describe only. Changed at runtime only
+    /// through the agent's API (PUT /actions/mode); a restart goes back to the configured value.
+    /// </summary>
+    public ActionMode Mode { get; set; } = ActionMode.DryRun;
 
     /// <summary>The allowlist: action type -> its own mode. Types missing here don't exist for the agent.</summary>
     public IReadOnlyDictionary<string, ActionMode> Allowed { get; init; } = new Dictionary<string, ActionMode>();

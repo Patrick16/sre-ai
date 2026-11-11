@@ -26,6 +26,21 @@ public interface IChatClientFactory
     (IChatClient Client, string Model) Create(string? model);
 }
 
+/// <summary>
+/// Told after every finished iteration, so a live view (the agent's console) can show the run while it is still
+/// going. Read-only by design: an observer gets the result, it cannot change the run.
+/// </summary>
+public interface IRunObserver
+{
+    void IterationFinished(TaskSpec task, IterationResult result);
+}
+
+public sealed class NullRunObserver : IRunObserver
+{
+    public static readonly NullRunObserver Instance = new();
+    public void IterationFinished(TaskSpec task, IterationResult result) { }
+}
+
 public sealed record AuditEvent(DateTimeOffset Ts, string RunId, int Iteration, string Event, object? Data);
 
 /// <summary>Append-only record of everything the agent saw, decided and did.</summary>

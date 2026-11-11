@@ -41,6 +41,8 @@ if (actions.Allowed.Count > 0)
     builder.Services.AddSingleton<Guardrails>();
     builder.Services.AddSingleton<ActionLead>();
 }
+builder.Services.AddSingleton<RunTraceStore>();
+builder.Services.AddSingleton<IRunObserver>(sp => sp.GetRequiredService<RunTraceStore>());
 builder.Services.AddSingleton<RalfIteration>();
 builder.Services.AddSingleton<RunSynthesizer>();
 builder.Services.AddSingleton<RalphLoop>();
@@ -128,6 +130,9 @@ app.MapPost("/runs", (HttpContext http, ManualRun? body, RunQueue queue, OpenAiC
 
 app.MapGet("/runs", (RunQueue queue) => queue.List());
 app.MapGet("/runs/{id}", (string id, RunQueue queue) => queue.Get(id) is { } r ? Results.Ok(r) : Results.NotFound());
+// The console's live view: the run plus every iteration finished so far (in memory, the last 30 runs).
+app.MapGet("/runs/{id}/trace", (string id, RunQueue queue, RunTraceStore traces) =>
+    queue.Get(id) is { } run ? Results.Ok(new { run, iterations = traces.Get(id) }) : Results.NotFound());
 app.MapGet("/runs/{id}/report", (string id, RunQueue queue) =>
     queue.Get(id)?.ReportPath is { } path && File.Exists(path)
         ? Results.Text(File.ReadAllText(path), "text/markdown; charset=utf-8")
@@ -139,6 +144,27 @@ app.MapGet("/alerts", (AlertInbox inbox) => inbox.Latest());
 app.MapGet("/actions", (IServiceProvider sp) => sp.GetService<ActionSettings>() is { } s
     ? Results.Ok(new { s.Enabled, mode = s.Mode.ToString(), allowed = s.Allowed.ToDictionary(kv => kv.Key, kv => s.EffectiveMode(kv.Key).ToString()), s.MaxPerRun, s.MaxPerWindow, window = s.Window.ToString(), cooldown = s.Cooldown.ToString() })
     : Results.Ok(new { enabled = false, reason = "no action is allowlisted (Actions__Allowed__*): observe-only" }));
+// The global ceiling, changed by a human from the console. In memory on purpose: a restart goes back to Actions__Mode.
+app.MapPut("/actions/mode", (HttpContext http, ModeBody body, IServiceProvider sp, IOptions<AgentOptions> options, ILogger<ApprovalGate> logger) =>
+{
+    if (!ApiToken.IsValid(options.Value.ApiToken, http.Request.Headers[ApiToken.Header])) return Results.Unauthorized();
+    if (sp.GetService<ActionSettings>() is not { } settings)
+        return Results.Conflict(new { error = "no action is allowlisted (Actions__Allowed__*): there is no mode to change" });
+    if (!Enum.TryParse<ActionMode>(body.Mode, ignoreCase: true, out var mode) || !Enum.IsDefined(mode))
+        return Results.BadRequest(new { error = $"mode must be one of: {string.Join(", ", Enum.GetNames<ActionMode>())}" });
+    var previous = settings.Mode;
+    settings.Mode = mode;
+    logger.LogWarning("Action ceiling changed from {Previous} to {Mode} by {By}", previous, mode, body.By ?? "unknown");
+    return Results.Ok(new { mode = mode.ToString(), previous = previous.ToString() });
+});
+app.MapGet("/console", () =>
+{
+    using var stream = typeof(RunTraceStore).Assembly.GetManifestResourceStream("console.html")
+        ?? throw new InvalidOperationException("console.html is not embedded in the agent");
+    using var reader = new StreamReader(stream);
+    return Results.Content(reader.ReadToEnd(), "text/html; charset=utf-8");
+});
+app.MapGet("/", () => Results.Redirect("/console"));
 app.MapGet("/approvals", (ApprovalGate gate) => gate.Pending());
 app.MapPost("/approvals/{id}", (HttpContext http, string id, ApprovalBody body, ApprovalGate gate, IOptions<AgentOptions> options, ILogger<ApprovalGate> logger) =>
 {
@@ -154,6 +180,8 @@ app.Run();
 record ManualRun(string? Goal, string? Model, bool? Incident, string? Note);
 
 record ApprovalBody(bool Approve, string? By);
+
+record ModeBody(string Mode, string? By);
 
 // https://prometheus.io/docs/alerting/latest/configuration/#webhook_config
 record AlertmanagerWebhook(string Status, string Receiver, List<AlertmanagerAlert> Alerts);

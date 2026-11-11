@@ -44,7 +44,7 @@ Retrieve → Analyze → Lead → Feedback, см. [docs/05-agent-architecture.md
 ```powershell
 ./scripts/up.ps1           # всё с нуля одной командой (~20-30 мин с прогретыми кэшами), в конце — smoke test
 ./scripts/smoke-test.ps1   # проверить, что всё работает (в любой момент)
-./scripts/recover-mesh.ps1 # после перезапуска Docker Desktop, если smoke test ругается на mesh
+./scripts/recover-mesh.ps1 # после перезапуска Docker Desktop или сна ноутбука, если smoke test ругается на mesh или сертификаты
 ./scripts/game-day.ps1     # хаос-сценарии + оценка агента
 ./scripts/cluster-down.ps1 # удалить кластер (и все данные в нём)
 ```

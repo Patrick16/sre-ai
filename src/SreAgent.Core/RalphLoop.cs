@@ -13,8 +13,11 @@ public sealed class RalphLoop(
     RunSynthesizer synthesizer,
     IAuditLog audit,
     TimeProvider time,
-    ILogger<RalphLoop> log)
+    ILogger<RalphLoop> log,
+    IRunObserver? observer = null)
 {
+    private readonly IRunObserver _observer = observer ?? NullRunObserver.Instance;
+
     public async Task<AgentRun> RunAsync(TaskSpec task, string? model, CancellationToken ct)
     {
         var run = new AgentRun(task, time.GetUtcNow());
@@ -75,6 +78,15 @@ public sealed class RalphLoop(
                 state.Append(result);
                 await states.SaveAsync(state, ct); // persisted after every iteration: a restart loses at most one
                 await audit.WriteAsync(new AuditEvent(time.GetUtcNow(), task.Id, i, "completion.checked", new { status.Done, status.Reason }), ct);
+                try
+                {
+                    _observer.IterationFinished(task, result);
+                }
+                catch (Exception ex)
+                {
+                    // A live view must never change the outcome of a run.
+                    log.LogWarning(ex, "Run {RunId}: the run observer failed on iteration {Iteration}", task.Id, i);
+                }
                 log.LogInformation("Run {RunId} iteration {Iteration}: {Hypothesis} (done={Done}: {Reason})",
                     task.Id, i, result.Analysis.Hypothesis, status.Done, status.Reason);
 
