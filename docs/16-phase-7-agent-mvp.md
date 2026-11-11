@@ -247,6 +247,32 @@ burn-rate алерты (метка `slo`) прогон не держат, дер
 
 ## Упражнения
 
+**Снимок проекта на момент этой фазы** — тег `phase-7` (коммит `d89a169`: агент только читает, с финальным
+синтезом отчёта). Повторным прогоном не проверялся — это состояние, на котором упражнения были составлены.
+Нужен запущенный LM Studio.
+
+```powershell
+git worktree add ../sre-ai-phase-7 phase-7   # отдельная папка; ваша рабочая копия не меняется
+cd ../sre-ai-phase-7
+./scripts/cluster-down.ps1                   # имя кластера общее (sre-ai): сначала удалить текущий
+./scripts/cluster-up.ps1
+./scripts/build-images.ps1
+./scripts/deploy-infra.ps1
+./scripts/deploy-apps.ps1
+# ... упражнения ...
+cd ../sre-ai; git worktree remove ../sre-ai-phase-7 --force
+./scripts/reset-exercise.ps1 -Level Cluster -Yes   # собрать текущий проект заново
+```
+
+**Предусловия и откат.** Нужен зелёный `./scripts/smoke-test.ps1` и запущенный LM Studio с моделью
+(`--context-length 32768`). Цифры в «Что показала проверка» записаны на агенте до [20](20-phases-11-plus-plan.md);
+пока опции оттуда (structured output и т.п.) выключены, поведение то же. Откат:
+
+```powershell
+git restore infra/ src/             # если правили values или код
+./scripts/reset-exercise.ps1        # агент и сервисы обратно; запущенные прогоны не возобновляются
+```
+
 | # | Сделать | Что ожидать |
 |---|---|---|
 | 1 | Прочитать audit одного прогона: `kubectl exec -n sre-agent deploy/sre-agent -c sre-agent -- cat /data/audit/<дата>.jsonl` | Вся цепочка: run.started → observation.collected → tool.called → analysis.completed → completion.checked |

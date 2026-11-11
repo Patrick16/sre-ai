@@ -153,6 +153,32 @@ values-файл; следующий шаг — GitOps (Argo CD, Фаза 10), г
 
 ## Упражнения
 
+**Снимок проекта на момент этой фазы** — тег `phase-3` (коммит `50ed554`). Заказы там ещё в памяти подов
+(PostgreSQL появился в Фазе 4). Повторным прогоном не проверялся — это состояние, на котором упражнения были
+составлены.
+
+```powershell
+git worktree add ../sre-ai-phase-3 phase-3   # отдельная папка; ваша рабочая копия не меняется
+cd ../sre-ai-phase-3
+./scripts/cluster-down.ps1                   # имя кластера общее (sre-ai): сначала удалить текущий
+./scripts/cluster-up.ps1
+./scripts/build-images.ps1
+./scripts/deploy-infra.ps1
+./scripts/deploy-apps.ps1
+# ... упражнения ...
+cd ../sre-ai; git worktree remove ../sre-ai-phase-3 --force
+./scripts/reset-exercise.ps1 -Level Cluster -Yes   # собрать текущий проект заново
+```
+
+**Предусловия и откат.** Нужен зелёный `./scripts/smoke-test.ps1`. Для упражнения 1 нужен git-коммит `8a47ee6`
+(он в истории). Упражнения 3–9 правят values-файлы и создают drift. Откат (включая конфликт владельца полей
+после `kubectl scale` из п. 8 — скрипт берёт поля обратно через `--force-conflicts`):
+
+```powershell
+git restore infra/helm/releases                  # если правили values-файлы
+./scripts/reset-exercise.ps1
+```
+
 | # | Сделать | Что ожидать |
 |---|---|---|
 | 1 | `helm template` для каждого сервиса и сравнить с удалёнными манифестами: `git show 8a47ee6:infra/manifests/phase-1/orders-api.yaml` | Те же объекты, плюс labels Helm, checksum, preStop |

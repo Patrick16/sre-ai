@@ -112,6 +112,33 @@ log: Database unavailable: 42P01: relation "orders" does not exist
 
 ## Упражнения
 
+**Снимок проекта на момент этой фазы** — тег `phase-4` (коммит `8e60ff8`). Повторным прогоном не проверялся —
+это состояние, на котором упражнения были составлены.
+
+```powershell
+git worktree add ../sre-ai-phase-4 phase-4   # отдельная папка; ваша рабочая копия не меняется
+cd ../sre-ai-phase-4
+./scripts/cluster-down.ps1                   # имя кластера общее (sre-ai): сначала удалить текущий
+./scripts/cluster-up.ps1
+./scripts/build-images.ps1
+./scripts/deploy-infra.ps1
+./scripts/deploy-apps.ps1
+# ... упражнения ...
+cd ../sre-ai; git worktree remove ../sre-ai-phase-4 --force
+./scripts/reset-exercise.ps1 -Level Cluster -Yes   # собрать текущий проект заново
+```
+
+**Предусловия и откат.** Нужен зелёный `./scripts/smoke-test.ps1`. Упражнение 5 останавливает ноду; 6 удаляет
+данные; 9 ставит оператор. Откат:
+
+```powershell
+./scripts/reset-exercise.ps1                       # ноды, релизы (данные в БД остаются как есть)
+./scripts/reset-exercise.ps1 -Level Cluster -Yes   # если удалили PVC, ставили CloudNativePG или нужна «свежая» БД (~9 мин)
+```
+
+Если вы раньше делали учебный drill бэкапа из [20](20-phases-11-plus-plan.md), в п. 6 вы уже знаете ответ —
+для полноты ощущений начните с чистого `-Level Cluster`.
+
 | # | Сделать | Что ожидать |
 |---|---|---|
 | 1 | `kubectl get sts,pod,pvc,pv -n sandbox` и `kubectl describe pvc data-postgres-0 -n sandbox` | Цепочка StatefulSet → под → PVC → PV, событие `ProvisioningSucceeded` |

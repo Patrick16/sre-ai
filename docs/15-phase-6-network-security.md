@@ -199,6 +199,30 @@ cert-manager → identity Linkerd → CRD → CNI → control plane — и то�
 
 ## Упражнения
 
+**Снимок проекта на момент этой фазы** — тег `phase-6` (коммит `2739c5a`). Повторным прогоном не проверялся —
+это состояние, на котором упражнения были составлены.
+
+```powershell
+git worktree add ../sre-ai-phase-6 phase-6   # отдельная папка; ваша рабочая копия не меняется
+cd ../sre-ai-phase-6
+./scripts/cluster-down.ps1                   # имя кластера общее (sre-ai): сначала удалить текущий
+./scripts/cluster-up.ps1
+./scripts/build-images.ps1
+./scripts/deploy-infra.ps1
+./scripts/deploy-apps.ps1
+# ... упражнения ...
+cd ../sre-ai; git worktree remove ../sre-ai-phase-6 --force
+./scripts/reset-exercise.ps1 -Level Cluster -Yes   # собрать текущий проект заново
+```
+
+**Предусловия и откат.** Нужен зелёный `./scripts/smoke-test.ps1`. Упражнение 3 меняет values Traefik
+(платформа), 5–6 создают `Server`/`AuthorizationPolicy` (скрипт их удаляет — в baseline их нет). Откат:
+
+```powershell
+git restore infra/
+./scripts/reset-exercise.ps1 -Level Platform
+```
+
 | # | Сделать | Что ожидать |
 |---|---|---|
 | 1 | Открыть Linkerd Viz (port-forward выше): Namespaces → sandbox → orders-api | Success rate, RPS, задержки по каждому ребру, mTLS-замки |

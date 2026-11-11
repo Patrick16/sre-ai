@@ -136,6 +136,33 @@ Alertmanager слал webhook'и агенту, которого ещё не бы
 
 ## Упражнения
 
+**Снимок проекта на момент этой фазы** — тег `phase-5` (коммит `c3d09cc`; агент там ещё заглушка вебхука).
+Повторным прогоном не проверялся — это состояние, на котором упражнения были составлены.
+
+```powershell
+git worktree add ../sre-ai-phase-5 phase-5   # отдельная папка; ваша рабочая копия не меняется
+cd ../sre-ai-phase-5
+./scripts/cluster-down.ps1                   # имя кластера общее (sre-ai): сначала удалить текущий
+./scripts/cluster-up.ps1
+./scripts/build-images.ps1
+./scripts/deploy-infra.ps1
+./scripts/deploy-apps.ps1
+# ... упражнения ...
+cd ../sre-ai; git worktree remove ../sre-ai-phase-5 --force
+./scripts/reset-exercise.ps1 -Level Cluster -Yes   # собрать текущий проект заново
+```
+
+**Предусловия и откат.** Нужен зелёный `./scripts/smoke-test.ps1`; опциональные «шумные» алерты из
+[20](20-phases-11-plus-plan.md), если вы их ставили, должны быть сняты — иначе картина в Alertmanager другая.
+Откат:
+
+```powershell
+git restore infra/                      # если правили values (п. 8, 9)
+./scripts/reset-exercise.ps1            # postgres/orders-api обратно из values
+```
+
+Silence из п. 7 скрипт не снимает — завершите его в Alertmanager UI (Silences → Expire).
+
 | # | Сделать | Что ожидать |
 |---|---|---|
 | 1 | Открыть Grafana → Sandbox / Golden signals, переключить `Service` | Трафик, ошибки, задержки, насыщение, burn rate, логи выбранного сервиса |

@@ -185,6 +185,32 @@ restart без простоя. Но действие было впустую, и
 
 ## Упражнения
 
+**Снимок проекта на момент этой фазы** — тег `phase-8` (коммит `a650d71`). Повторным прогоном не проверялся —
+это состояние, на котором упражнения были составлены. Нужен запущенный LM Studio.
+
+```powershell
+git worktree add ../sre-ai-phase-8 phase-8   # отдельная папка; ваша рабочая копия не меняется
+cd ../sre-ai-phase-8
+./scripts/cluster-down.ps1                   # имя кластера общее (sre-ai): сначала удалить текущий
+./scripts/cluster-up.ps1
+./scripts/build-images.ps1
+./scripts/deploy-infra.ps1
+./scripts/deploy-apps.ps1
+# ... упражнения ...
+cd ../sre-ai; git worktree remove ../sre-ai-phase-8 --force
+./scripts/reset-exercise.ps1 -Level Cluster -Yes   # собрать текущий проект заново
+```
+
+**Предусловия и откат.** Нужен зелёный `./scripts/smoke-test.ps1`, LM Studio с моделью и режим по умолчанию
+(`Actions:Mode: DryRun` в values). Kill switch (п. 1) скрипт удаляет; политика admission (п. 4) лежит в платформенном
+слое, поэтому после неё — `-Level Platform`:
+
+```powershell
+git restore infra/
+./scripts/reset-exercise.ps1                   # kill switch снят, релизы из values
+./scripts/reset-exercise.ps1 -Level Platform   # если правили ValidatingAdmissionPolicy
+```
+
 1. Включите kill switch во время прогона, где модель предлагает рестарт: в отчёте — `❌ kill-switch`.
 2. Поставьте `sre-agent/protected: "true"` на Deployment worker (через values, не `kubectl annotate` — почему?) и
    попросите агента вручную (`POST /runs` с целью «перезапусти worker») — посмотрите, какая проверка откажет.

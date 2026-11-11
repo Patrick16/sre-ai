@@ -5,7 +5,10 @@
 [CmdletBinding()]
 param(
     # Order matters: the database first, then its clients, then traffic, then the agent.
-    [string[]]$Services = @('postgres', 'orders-api', 'worker', 'frontend', 'loadgen', 'sre-agent')
+    [string[]]$Services = @('postgres', 'orders-api', 'worker', 'frontend', 'loadgen', 'sre-agent'),
+    # Take over fields that someone else (kubectl scale/edit...) changed by hand - used by reset-exercise.ps1.
+    # Off by default on purpose: a conflict is a signal of drift (docs/12, exercise 8), not something to hide.
+    [switch]$ForceConflicts
 )
 $ErrorActionPreference = 'Stop'
 
@@ -36,7 +39,8 @@ foreach ($service in $Services) {
     $chart = $charts[$service] ?? $default
 
     # --rollback-on-failure: if pods don't become ready in time, Helm reverts to the last good revision.
-    helm upgrade --install $service $chart -n $namespace -f $valuesFile.FullName --wait --rollback-on-failure --timeout 5m
+    $extra = $ForceConflicts ? @('--force-conflicts') : @()
+    helm upgrade --install $service $chart -n $namespace -f $valuesFile.FullName --wait --rollback-on-failure --timeout 5m @extra
     if ($LASTEXITCODE -ne 0) { throw "helm upgrade $service failed (rolled back)" }
 }
 

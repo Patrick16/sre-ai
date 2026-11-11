@@ -133,6 +133,30 @@ entrypoint `traefik` — наружу он не выставлен (выстав
 
 ## Упражнения
 
+**Снимок проекта на момент этой фазы** — тег `phase-2` (коммит `95f2f88`: сырые манифесты + Traefik). Повторным
+прогоном не проверялся — это состояние, на котором упражнения были составлены.
+
+```powershell
+git worktree add ../sre-ai-phase-2 phase-2   # отдельная папка; ваша рабочая копия не меняется
+cd ../sre-ai-phase-2
+./scripts/cluster-down.ps1                   # имя кластера общее (sre-ai): сначала удалить текущий
+./scripts/cluster-up.ps1
+./scripts/build-images.ps1
+./scripts/deploy-phase1.ps1
+./scripts/deploy-phase2.ps1
+# ... упражнения ...
+cd ../sre-ai; git worktree remove ../sre-ai-phase-2 --force
+./scripts/reset-exercise.ps1 -Level Cluster -Yes   # собрать текущий проект заново
+```
+
+**Предусловия и откат.** Нужен зелёный `./scripts/smoke-test.ps1`. Упражнения 3–4 и 6 меняют Ingress/Certificate,
+упражнение 7 — values Traefik (платформенный слой). Откат:
+
+```powershell
+git restore infra/                               # если правили values-файлы
+./scripts/reset-exercise.ps1 -Level Platform     # платформа + приложения, данные сохраняются
+```
+
 | # | Сделать | Что ожидать |
 |---|---|---|
 | 1 | `kubectl describe certificate sandbox-tls -n sandbox`, затем `kubectl get certificaterequest -n sandbox` | Цепочка объектов cert-manager и их статусы |
