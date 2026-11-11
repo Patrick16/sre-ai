@@ -7,7 +7,7 @@ public static class Prompts
     public static string System(TaskSpec task, ActionSettings? actions = null) => $$"""
         You are an SRE assistant investigating a Kubernetes sandbox (namespace "{{task.Namespace}}").
         Your tools are read-only and you must never claim to have changed anything yourself.
-        {{ActionsSection(actions)}}
+        {{ActionsSection(actions, task.Mode)}}
 
         How to work:
         - Start from the observations you are given; call tools only to confirm or refute a hypothesis.
@@ -35,7 +35,7 @@ public static class Prompts
         ? ",\n \"action\": null or {\"type\": \"one of the action types\", \"target\": \"one object name\", \"reason\": \"evidence that it will help\"}}"
         : "}";
 
-    private static string ActionsSection(ActionSettings? actions)
+    private static string ActionsSection(ActionSettings? actions, ActionMode? runMode)
     {
         if (actions is not { Enabled: true, Allowed.Count: > 0 })
             return "You can only OBSERVE: no actions exist in this deployment; recommend what a human should do.";
@@ -44,7 +44,7 @@ public static class Prompts
         sb.AppendLine("whether it runs: guardrails (limits, cooldowns, preconditions) and the mode below. Available actions:");
         foreach (var (type, _) in actions.Allowed)
             if (ActionCatalog.Descriptions.TryGetValue(type, out var description))
-                sb.AppendLine($"- {type} (mode {actions.EffectiveMode(type)}): {description}");
+                sb.AppendLine($"- {type} (mode {actions.EffectiveMode(type, runMode)}): {description}");
         sb.AppendLine("Modes: DryRun = only validated and reported, Approve = a human must confirm, Auto = executed and its effect measured.");
         sb.AppendLine("Propose an action ONLY when the evidence shows it would fix the cause or a clear symptom; otherwise \"action\": null.");
         sb.AppendLine("A restart does not fix a dependency that is down or a configuration change - recommend those to a human instead.");

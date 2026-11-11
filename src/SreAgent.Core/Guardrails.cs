@@ -15,7 +15,7 @@ public sealed partial class Guardrails(ActionSettings settings, IActionExecutor 
         ActionProposal proposal, TaskSpec task, RunState state, CancellationToken ct)
     {
         var checks = new List<GuardrailCheck>();
-        var mode = settings.EffectiveMode(proposal.Type);
+        var mode = settings.EffectiveMode(proposal.Type, task.Mode);
 
         bool Check(string name, bool passed, string detail)
         {

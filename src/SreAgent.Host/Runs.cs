@@ -2,10 +2,27 @@ using System.Collections.Concurrent;
 using System.Threading.Channels;
 using Microsoft.Extensions.Options;
 using SreAgent.Core;
+using SreAgent.LlmClients;
 
 namespace SreAgent.Host;
 
-public sealed record RunRequest(TaskSpec Task, string? Model);
+/// <param name="Model">what the Ralph loop passes to the chat client factory: "provider::model", a model, or null (default).</param>
+public sealed record RunRequest(TaskSpec Task, string? Model)
+{
+    /// <summary>For the run list only: which provider and model this run was started with.</summary>
+    public string? Provider { get; init; }
+    public string? ModelName { get; init; }
+
+    /// <summary>
+    /// Fixes the provider and model at the moment the run is queued, so a later change of the default does not
+    /// switch a run that is already waiting. An invalid choice is left as it is: the run then fails with the reason.
+    /// </summary>
+    public static RunRequest For(TaskSpec task, OpenAiCompatibleChatClientFactory llm, string? spec = null)
+    {
+        var (provider, model, error) = llm.Resolve(spec);
+        return error is null ? new RunRequest(task, LlmRef.Format(provider, model)) { Provider = provider, ModelName = model } : new RunRequest(task, spec);
+    }
+}
 
 public sealed record RunSummary(
     string Id,
@@ -17,15 +34,46 @@ public sealed record RunSummary(
     string? Hypothesis,
     string? Outcome,
     string? OutcomeReason,
-    string? ReportPath);
+    string? ReportPath)
+{
+    public string? Goal { get; init; }
+
+    /// <summary>What started it, in words: the alert names, the human's note, "routine check every N min".</summary>
+    public string? TriggerDetail { get; init; }
+    public string? Provider { get; init; }
+    public string? Model { get; init; }
+
+    /// <summary>The run's own action mode, or null when it used the global ceiling.</summary>
+    public string? Mode { get; init; }
+}
 
 /// <summary>
 /// Queue + bookkeeping. One run per namespace at a time: a database outage fires PostgresDown and, minutes later,
 /// two burn-rate alerts - that is one problem, so later alerts don't start parallel investigations; the running
 /// one sees them in its next Retrieve anyway. One worker overall: a single local model can't serve two runs well.
 /// </summary>
-public sealed class RunQueue(IOptions<AgentOptions> options, TimeProvider time)
+public sealed class RunQueue
 {
+    private readonly IOptions<AgentOptions> options;
+    private readonly TimeProvider time;
+    private readonly RunHistory? history;
+
+    public RunQueue(IOptions<AgentOptions> options, TimeProvider time, RunHistory? history = null)
+    {
+        this.options = options;
+        this.time = time;
+        this.history = history;
+        // Runs of earlier agent processes. One that was still queued or running then never finished: say so.
+        foreach (var run in history?.LoadSummaries() ?? [])
+            _runs[run.Id] = run.Status == "finished" ? run : run with
+            {
+                Status = "finished",
+                Outcome = RunOutcome.Cancelled.ToString(),
+                FinishedAt = run.FinishedAt ?? run.QueuedAt,
+                OutcomeReason = "the agent restarted while this run was queued or running",
+            };
+    }
+
     // FullMode.Wait: TryWrite then returns false when full. (DropWrite would return true and silently lose the run.)
     private readonly Channel<RunRequest> _channel = Channel.CreateBounded<RunRequest>(new BoundedChannelOptions(10) { FullMode = BoundedChannelFullMode.Wait });
     private readonly ConcurrentDictionary<string, RunSummary> _runs = new();
@@ -35,11 +83,11 @@ public sealed class RunQueue(IOptions<AgentOptions> options, TimeProvider time)
 
     public ChannelReader<RunRequest> Reader => _channel.Reader;
 
-    public TaskSpec NewTask(TriggerEvent trigger, string goal, string? ns = null)
+    public TaskSpec NewTask(TriggerEvent trigger, string goal, string? ns = null, ActionMode? mode = null)
     {
         var o = options.Value;
         var id = $"{time.GetUtcNow():yyyyMMdd-HHmmss}-{trigger.Kind.ToString().ToLowerInvariant()}-{Guid.NewGuid().ToString("N")[..6]}";
-        return new TaskSpec(id, goal, trigger, ns ?? o.Namespace, o.Limits.ToLimits(), o.Language);
+        return new TaskSpec(id, goal, trigger, ns ?? o.Namespace, o.Limits.ToLimits(), o.Language) { Mode = mode };
     }
 
     /// <returns>false when a run for the same namespace is already queued or running, or the queue is full.</returns>
@@ -51,30 +99,50 @@ public sealed class RunQueue(IOptions<AgentOptions> options, TimeProvider time)
 
         // Bookkeeping BEFORE the channel write: the worker may take the request off the queue immediately, and
         // MarkRunning must already find it (the other order was a race that could crash the worker).
-        _runs[id] = new RunSummary(id, request.Task.Trigger.Kind.ToString(), "queued", time.GetUtcNow(), null, 0, null, null, null, null);
+        var trigger = request.Task.Trigger;
+        var summary = new RunSummary(id, trigger.Kind.ToString(), "queued", time.GetUtcNow(), null, 0, null, null, null, null)
+        {
+            Goal = request.Task.Goal,
+            TriggerDetail = trigger.Alerts.Count > 0 ? string.Join(", ", trigger.Alerts.Select(a => a.Name).Distinct()) : trigger.Note,
+            Provider = request.Provider,
+            Model = request.ModelName,
+            Mode = request.Task.Mode?.ToString(),
+        };
+        _runs[id] = summary;
         if (!_channel.Writer.TryWrite(request))
         {
             _runs.TryRemove(id, out _);
             _activeByNamespace.TryRemove(ns, out _);
             return false;
         }
+        history?.SaveSummary(summary);
         Trim();
         return true;
     }
 
     public void MarkRunning(string id)
     {
-        if (_runs.TryGetValue(id, out var s)) _runs[id] = s with { Status = "running" };
+        if (!_runs.TryGetValue(id, out var s)) return;
+        _runs[id] = s with { Status = "running" };
+        history?.SaveSummary(_runs[id]);
     }
 
     public void Complete(AgentRun run)
     {
         _activeByNamespace.TryRemove(run.Task.Namespace, out _);
         var id = run.Task.Id;
-        var queuedAt = _runs.TryGetValue(id, out var old) ? old.QueuedAt : run.StartedAt;
-        _runs[id] = new RunSummary(id, run.Task.Trigger.Kind.ToString(), "finished", queuedAt, run.FinishedAt, run.Iterations.Count,
+        _runs.TryGetValue(id, out var old);
+        _runs[id] = new RunSummary(id, run.Task.Trigger.Kind.ToString(), "finished", old?.QueuedAt ?? run.StartedAt, run.FinishedAt, run.Iterations.Count,
             run.Synthesis?.RootCause ?? run.Iterations.LastOrDefault()?.Analysis.Hypothesis,
-            run.Outcome?.ToString(), run.OutcomeReason, run.ReportPath);
+            run.Outcome?.ToString(), run.OutcomeReason, run.ReportPath)
+        {
+            Goal = run.Task.Goal,
+            TriggerDetail = old?.TriggerDetail ?? run.Task.Trigger.Note,
+            Provider = old?.Provider,
+            Model = old?.Model ?? run.Iterations.LastOrDefault()?.Model,
+            Mode = run.Task.Mode?.ToString(),
+        };
+        history?.SaveSummary(_runs[id]);
     }
 
     /// <summary>The agent is shutting down mid-run: free the namespace slot (the run is not coming back).</summary>
@@ -114,7 +182,7 @@ public sealed class RunQueue(IOptions<AgentOptions> options, TimeProvider time)
 
     public string? ActiveRunFor(string ns) => _activeByNamespace.GetValueOrDefault(ns);
 
-    public IEnumerable<RunSummary> List() => _runs.Values.OrderByDescending(r => r.QueuedAt).Take(50);
+    public IEnumerable<RunSummary> List() => _runs.Values.OrderByDescending(r => r.QueuedAt).Take(MaxRemembered);
 
     public RunSummary? Get(string id) => _runs.GetValueOrDefault(id);
 }
@@ -175,7 +243,7 @@ public sealed class AgentWorker(
 }
 
 /// <summary>Optional routine health check (Agent:ScheduleMinutes > 0).</summary>
-public sealed class HealthCheckScheduler(RunQueue queue, IOptions<AgentOptions> options, TimeProvider time, ILogger<HealthCheckScheduler> log)
+public sealed class HealthCheckScheduler(RunQueue queue, OpenAiCompatibleChatClientFactory llm, IOptions<AgentOptions> options, TimeProvider time, ILogger<HealthCheckScheduler> log)
     : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -187,7 +255,7 @@ public sealed class HealthCheckScheduler(RunQueue queue, IOptions<AgentOptions> 
         {
             var ns = options.Value.Namespace;
             var task = queue.NewTask(new TriggerEvent(TriggerKind.Schedule, [], $"routine check every {minutes} min", time.GetUtcNow()), Goals.HealthCheck(ns));
-            if (!queue.TryEnqueue(new RunRequest(task, null)))
+            if (!queue.TryEnqueue(RunRequest.For(task, llm)))
                 log.LogInformation("Scheduled health check skipped: a run for {Namespace} is already active", ns);
         }
     }

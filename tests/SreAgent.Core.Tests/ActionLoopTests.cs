@@ -43,6 +43,35 @@ public class ActionLoopTests
     }
 
     [Fact]
+    public async Task A_runs_own_mode_replaces_the_global_ceiling_for_that_run_only()
+    {
+        // Global ceiling DryRun (as in the values file); the human who started this run chose Auto.
+        var settings = ActionTest.Settings(mode: ActionMode.DryRun);
+        var h = Build(Model(ProposeRestart), new ScriptedCompletion(true), settings, new FakeProbe((0.4, 0), (0.0, 0)));
+
+        var run = await h.Loop.RunAsync(TestTasks.Create() with { Mode = ActionMode.Auto }, null, CancellationToken.None);
+
+        var action = Assert.Single(run.Actions);
+        Assert.Equal(ActionStatus.Executed, action.Status);
+        Assert.Equal(ActionMode.Auto, action.Mode);
+        Assert.Equal(ActionMode.DryRun, settings.Mode);   // the global ceiling is untouched
+    }
+
+    [Fact]
+    public async Task A_runs_mode_cannot_lift_an_actions_own_mode()
+    {
+        // delete_pod-style setup: the action itself is Approve-only; a run started as Auto still needs the human.
+        var h = Build(Model(ProposeRestart), new ScriptedCompletion(true), ActionTest.Settings(mode: ActionMode.DryRun, own: ActionMode.Approve),
+            decision: new ApprovalDecision(false, "bob"));
+
+        var run = await h.Loop.RunAsync(TestTasks.Create() with { Mode = ActionMode.Auto }, null, CancellationToken.None);
+
+        var action = Assert.Single(run.Actions);
+        Assert.Equal(ActionMode.Approve, action.Mode);
+        Assert.Equal(ActionStatus.Rejected, action.Status);
+    }
+
+    [Fact]
     public async Task Auto_mode_executes_and_measures_the_effect()
     {
         var h = Build(Model(ProposeRestart), new ScriptedCompletion(true), ActionTest.Settings(), new FakeProbe((0.4, 0), (0.0, 0)));

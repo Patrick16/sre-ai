@@ -99,8 +99,9 @@ public sealed record ActionSettings
     /// <summary>How long to wait after an action before measuring its effect (rollout + metric windows).</summary>
     public TimeSpan VerifyDelay { get; init; } = TimeSpan.FromSeconds(90);
 
-    public ActionMode EffectiveMode(string type) =>
-        Allowed.TryGetValue(type, out var own) ? (ActionMode)Math.Min((int)own, (int)Mode) : ActionMode.DryRun;
+    /// <param name="runMode">the ceiling of one run (<see cref="TaskSpec.Mode"/>); null = the global ceiling.</param>
+    public ActionMode EffectiveMode(string type, ActionMode? runMode = null) =>
+        Allowed.TryGetValue(type, out var own) ? (ActionMode)Math.Min((int)own, (int)(runMode ?? Mode)) : ActionMode.DryRun;
 }
 
 /// <summary>Knows how to check and perform each catalog action against the cluster (implemented with the k8s API).</summary>

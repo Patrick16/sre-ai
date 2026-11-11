@@ -5,9 +5,10 @@ namespace SreAgent.Host;
 
 /// <summary>
 /// Keeps the iterations of the last runs in memory, so the console can show a run while it is going
-/// (GET /runs/{id}/trace). Not persisted: after an agent restart the Markdown report stays the record.
+/// (GET /runs/{id}/trace), and hands each finished iteration to <see cref="RunHistory"/> so older runs can be read
+/// back from disk after an agent restart.
 /// </summary>
-public sealed class RunTraceStore : IRunObserver
+public sealed class RunTraceStore(RunHistory? history = null) : IRunObserver
 {
     private const int MaxRuns = 30;
     private readonly ConcurrentDictionary<string, List<IterationResult>> _iterations = new();
@@ -25,6 +26,7 @@ public sealed class RunTraceStore : IRunObserver
                 while (_order.Count > MaxRuns && _order.TryDequeue(out var old)) _iterations.TryRemove(old, out _);
             }
             _iterations[task.Id].Add(result);
+            history?.SaveTrace(task.Id, _iterations[task.Id].Select(IterationView.From).ToList());
         }
     }
 
@@ -33,8 +35,9 @@ public sealed class RunTraceStore : IRunObserver
     {
         lock (_lock)
         {
-            return _iterations.TryGetValue(runId, out var list) ? list.Select(IterationView.From).ToList() : [];
+            if (_iterations.TryGetValue(runId, out var list)) return list.Select(IterationView.From).ToList();
         }
+        return history?.LoadTrace(runId) ?? [];
     }
 }
 

@@ -5,7 +5,7 @@ replicas: 1
 
 image:
   repository: sre-agent/host
-  tag: "0.6.0"   # 0.6.0: console (GET /console), GET /runs/{id}/trace, PUT /actions/mode; 0.5.5: +Inf/-Inf/NaN printed like Prometheus; 0.5.4: budget notice is read by the model, NaN = not measured, corrupt ledger survives; 0.5.3: code-review fixes (2026-11-10); 0.2.x: observe-only; 0.3.x: facts + synthesis; 0.4.x: actions + guardrails; 0.5.0: incidents, steady state incl. pods; 0.5.1: latency in Retrieve; 0.5.2: age of last termination
+  tag: "0.7.0"   # 0.7.0: LLM providers + runtime key/default model, per-run action mode, run history on the PVC, console v2; 0.6.0: console (GET /console), GET /runs/{id}/trace, PUT /actions/mode; 0.5.5: +Inf/-Inf/NaN printed like Prometheus; 0.5.4: budget notice is read by the model, NaN = not measured, corrupt ledger survives; 0.5.3: code-review fixes (2026-11-10); 0.2.x: observe-only; 0.3.x: facts + synthesis; 0.4.x: actions + guardrails; 0.5.0: incidents, steady state incl. pods; 0.5.1: latency in Retrieve; 0.5.2: age of last termination
 
 # The agent talks to the Kubernetes API, so it needs a token. Rights = read in sandbox + exactly what the two actions
 # need. RBAC can't say "only this annotation" - patch on deployments would also allow scaling - so the admission
@@ -60,6 +60,18 @@ configEnv:
   Llm__AllowedModels__0: "qwen/qwen3.5-9b"
   Llm__AllowedModels__1: "qwythos-9b-claude-mythos-5-1m"
   Llm__AllowedModels__2: "gemma4-26b-a4b-uncensored-hauhaucs-balanced"
+  # More LLM providers for the console (Настройки -> Провайдеры и ключи). Off by default: a provider needs its BaseUrl
+  # here AND the egress rule in networkPolicy.allowToCidrs below - a request can never supply a URL itself.
+  # The key is typed into the console (kept in the agent's memory until it restarts) or comes from a Secret:
+  #   secretEnv: [{ name: Llm__Providers__openrouter__ApiKey, secretName: llm-keys, key: openrouter }]
+  # Models__N limits what a run may choose; without it any model id of that provider is accepted.
+  #Llm__Providers__openrouter__BaseUrl: "https://openrouter.ai/api/v1"   # enabled 2026-11-11 (owner's decision); key: console or Secret
+  Llm__Providers__anthropic__BaseUrl: "https://api.anthropic.com/v1/"
+  Llm__Providers__anthropic__Models__0: "claude-sonnet-5-5"
+  Llm__Providers__deepseek__BaseUrl: "https://api.deepseek.com"
+  Llm__Providers__deepseek__Models__0: "deepseek-flash"
+  Llm__Providers__deepseek__Models__1: "deepseek-v4-pro"
+  Agent__HistoryRetentionDays: "30"       # run list + iteration traces in /data/runs (the console's history)
   Tools__Namespaces__0: "sandbox"
   # Phase 8. Global ceiling DryRun: nothing changes until a human raises it (e.g. --set configEnv.Actions__Mode=Approve).
   # Effective mode = the stricter of the ceiling and the action's own mode.
@@ -85,6 +97,10 @@ networkPolicy:
   allowToCidrs:
     - { cidr: 172.18.0.0/16, port: 6443 }           # kube-apiserver (kind's node network; Service 10.96.0.1:443 after DNAT)
     - { cidr: 192.168.65.254/32, port: 1234 }       # LM Studio via host.docker.internal (Docker Desktop's host gateway)
+    # External LLM providers. A NetworkPolicy knows no host names, so "may call api.example.com" can only be written
+    # as "may open HTTPS to any address" - which also means everything the agent reads (logs, metrics, pod names) can
+    # leave the cluster in a prompt. Off by default; turn it on together with a Llm__Providers__* entry above.
+    - { cidr: 0.0.0.0/0, port: 443 }                # enabled 2026-11-11 for OpenRouter: HTTPS to ANY address (see above)
 
 resources:
   requests:

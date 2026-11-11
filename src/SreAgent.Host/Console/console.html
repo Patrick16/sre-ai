@@ -7,145 +7,161 @@
 <style>
   :root {
     --bg: #f5f6f8; --panel: #ffffff; --text: #1c2230; --muted: #667085; --line: #e2e5eb;
-    --accent: #2563eb; --ok: #15803d; --warn: #b45309; --bad: #b91c1c; --chip: #eef1f6;
+    --accent: #2563eb; --ok: #15803d; --warn: #b45309; --bad: #b91c1c; --chip: #eef1f6; --violet: #7c3aed;
   }
   @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) {
       --bg: #0f1115; --panel: #171a21; --text: #e6e8ee; --muted: #9aa3b2; --line: #2a2f3a;
-      --accent: #60a5fa; --ok: #4ade80; --warn: #fbbf24; --bad: #f87171; --chip: #232835;
+      --accent: #60a5fa; --ok: #4ade80; --warn: #fbbf24; --bad: #f87171; --chip: #232835; --violet: #a78bfa;
     }
   }
   :root[data-theme="dark"] {
     --bg: #0f1115; --panel: #171a21; --text: #e6e8ee; --muted: #9aa3b2; --line: #2a2f3a;
-    --accent: #60a5fa; --ok: #4ade80; --warn: #fbbf24; --bad: #f87171; --chip: #232835;
+    --accent: #60a5fa; --ok: #4ade80; --warn: #fbbf24; --bad: #f87171; --chip: #232835; --violet: #a78bfa;
   }
   * { box-sizing: border-box; }
   body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.45 system-ui, "Segoe UI", sans-serif; }
-  header { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between;
-           padding: 12px 16px; background: var(--panel); border-bottom: 1px solid var(--line); position: sticky; top: 0; z-index: 2; }
+  header { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between;
+           padding: 10px 16px; background: var(--panel); border-bottom: 1px solid var(--line); position: sticky; top: 0; z-index: 2; }
   h1 { font-size: 16px; margin: 0; display: flex; align-items: center; gap: 8px; }
   h2 { font-size: 15px; margin: 0 0 4px; }
+  h3 { font-size: 14px; margin: 14px 0 6px; }
   main { padding: 16px; display: grid; gap: 16px; max-width: 1400px; margin: 0 auto; }
-  .cols { display: grid; grid-template-columns: minmax(260px, 340px) 1fr; gap: 16px; align-items: start; }
-  @media (max-width: 820px) { .cols { grid-template-columns: 1fr; } }
-  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px; }
+  .cols { display: grid; grid-template-columns: minmax(270px, 350px) minmax(0, 1fr); gap: 16px; align-items: start; }
+  @media (max-width: 820px) { .cols { grid-template-columns: minmax(0, 1fr); } }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px; min-width: 0; }
   .hidden { display: none !important; }
   .muted { color: var(--muted); }
   .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
-  input { font: inherit; padding: 6px 9px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--text); min-width: 0; }
+  .grow { flex: 1 1 160px; min-width: 0; }
+  input, select { font: inherit; padding: 6px 9px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--text); min-width: 0; max-width: 100%; }
+  label { display: grid; gap: 3px; font-size: 13px; color: var(--muted); }
+  label > input, label > select { color: var(--text); font-size: 14px; }
   button { font: inherit; padding: 6px 12px; border-radius: 6px; border: 1px solid var(--accent); background: var(--accent); color: #fff; cursor: pointer; }
   button.ghost { background: transparent; color: var(--accent); }
   button.danger { background: transparent; color: var(--bad); border-color: var(--bad); }
+  button.link { background: none; border: none; color: var(--accent); padding: 0; text-align: left; }
   button[aria-pressed="true"] { box-shadow: inset 0 0 0 2px var(--text); }
-  button:disabled { opacity: .5; cursor: default; }
   a.ghost { font: inherit; padding: 6px 12px; border-radius: 6px; border: 1px solid var(--accent); color: var(--accent); text-decoration: none; }
   .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--muted); display: inline-block; }
   .dot.ok { background: var(--ok); } .dot.bad { background: var(--bad); }
   .chip { display: inline-block; padding: 1px 8px; border-radius: 999px; background: var(--chip); font-size: 12px; color: var(--muted); white-space: nowrap; }
   .chip.ok { color: var(--ok); } .chip.bad { color: var(--bad); } .chip.warn { color: var(--warn); } .chip.run { color: var(--accent); }
+  /* who started the run: one colour per trigger, the same in the list and in the session */
+  .trg { display: inline-block; padding: 1px 8px; border-radius: 4px; font-size: 12px; font-weight: 600; border: 1px solid currentColor; white-space: nowrap; }
+  .trg.Alert { color: var(--bad); } .trg.Incident { color: var(--warn); } .trg.Schedule { color: var(--violet); } .trg.Manual { color: var(--accent); }
   code { font-family: ui-monospace, Consolas, monospace; font-size: 12.5px; }
-  pre { white-space: pre-wrap; word-break: break-word; background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 8px; max-height: 360px; overflow: auto; font-size: 12.5px; margin: 6px 0; }
-  .ok { color: var(--ok); } .bad { color: var(--bad); } .warn { color: var(--warn); }
+  pre { white-space: pre-wrap; word-break: break-word; background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 8px; max-height: 340px; overflow: auto; font-size: 12.5px; margin: 6px 0; }
+  .ok { color: var(--ok); } .bad { color: var(--bad); } .warn { color: var(--warn); } .run { color: var(--accent); }
+  .status { cursor: pointer; }
   /* runs list */
-  #runs { display: grid; gap: 6px; margin-top: 10px; }
-  button.run { text-align: left; display: grid; gap: 2px; background: transparent; color: var(--text); border: 1px solid var(--line); }
-  button.run.sel { border-color: var(--accent); box-shadow: inset 3px 0 0 var(--accent); }
-  .runhyp { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--text); }
-  /* run detail */
+  .filters { display: flex; flex-wrap: wrap; gap: 4px; margin: 10px 0 2px; }
+  .filters button { padding: 2px 9px; font-size: 12px; border-color: var(--line); background: transparent; color: var(--muted); }
+  .filters button[aria-pressed="true"] { color: var(--text); border-color: var(--text); box-shadow: none; }
+  #runs { display: grid; gap: 6px; margin-top: 8px; max-height: 70vh; overflow: auto; }
+  button.runitem { text-align: left; display: grid; gap: 3px; background: transparent; color: var(--text); border: 1px solid var(--line); }
+  button.runitem.sel { border-color: var(--accent); box-shadow: inset 3px 0 0 var(--accent); }
+  .runhyp { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  /* session */
   .dhead { display: flex; flex-wrap: wrap; gap: 10px; justify-content: space-between; align-items: flex-start; }
+  .meta { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
   .verdict { margin: 10px 0; padding: 8px 10px; border-radius: 6px; background: var(--bg); border: 1px solid var(--line); }
-  /* iterations: collapsed by default, one line each */
-  details.it { border: 1px solid var(--line); border-radius: 8px; margin: 8px 0; background: var(--panel); }
-  details.it > summary { cursor: pointer; padding: 8px 10px; display: grid; grid-template-columns: 28px 1fr; gap: 2px 8px; list-style: none; }
-  details.it > summary::-webkit-details-marker { display: none; }
-  .num { font-weight: 600; color: var(--muted); }
-  .hyp { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .chips { grid-column: 2; display: flex; flex-wrap: wrap; gap: 6px; }
-  details.it .body { padding: 4px 12px 12px 12px; border-top: 1px solid var(--line); }
-  details.it .body p { margin: 8px 0; }
-  details.sub { margin: 8px 0; }
+  .interim { border-left: 3px solid var(--accent); padding: 8px 10px; margin: 10px 0; background: var(--bg); border-radius: 0 6px 6px 0; }
+  .report { border-top: 1px solid var(--line); margin-top: 12px; padding-top: 4px; overflow-wrap: anywhere; }
+  .report h2 { font-size: 17px; margin: 14px 0 6px; } .report h3 { font-size: 15px; } .report h4 { font-size: 14px; margin: 10px 0 4px; }
+  .report ul { margin: 4px 0; padding-left: 20px; }
+  .tablewrap { overflow-x: auto; }
+  table { border-collapse: collapse; font-size: 13px; margin: 6px 0; }
+  th, td { border: 1px solid var(--line); padding: 4px 8px; text-align: left; vertical-align: top; }
+  /* iterations (in the details dialog) */
+  .it { border: 1px solid var(--line); border-radius: 8px; margin: 10px 0; padding: 10px 12px; }
+  .ithead { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  .num { font-weight: 700; margin-right: 4px; }
+  .it p { margin: 6px 0; }
+  details.sub { margin: 6px 0; }
   details.sub > summary { cursor: pointer; color: var(--accent); }
   ul.plain { margin: 4px 0; padding-left: 18px; }
   .action { border-left: 3px solid var(--accent); padding: 6px 10px; margin: 8px 0; background: var(--bg); border-radius: 0 6px 6px 0; }
   ul.checks { list-style: none; padding-left: 0; margin: 4px 0; font-size: 13px; }
-  /* approvals and mode */
   .appr { border: 1px solid var(--warn); border-radius: 8px; padding: 10px; margin-top: 8px; }
-  .modes { display: flex; gap: 6px; flex-wrap: wrap; }
-  .allowed { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  /* dialogs */
+  dialog { border: 1px solid var(--line); border-radius: 12px; background: var(--panel); color: var(--text); padding: 0; width: min(920px, 94vw); max-height: 90vh; }
+  dialog::backdrop { background: rgba(0, 0, 0, .5); }
+  dialog.narrow { width: min(560px, 94vw); }
+  .dlghead { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 12px 16px; border-bottom: 1px solid var(--line); position: sticky; top: 0; background: var(--panel); z-index: 1; }
+  .dlgbody { padding: 12px 16px 16px; display: grid; gap: 10px; }
+  fieldset { border: 1px solid var(--line); border-radius: 8px; padding: 10px; margin: 0; display: grid; gap: 8px; min-width: 0; }
+  legend { padding: 0 6px; color: var(--muted); font-size: 13px; }
+  .prov { border-top: 1px solid var(--line); padding-top: 8px; display: grid; gap: 6px; }
+  .prov:first-of-type { border-top: none; padding-top: 0; }
   .toast { position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%); background: var(--text); color: var(--panel);
-           padding: 8px 14px; border-radius: 8px; max-width: 90vw; z-index: 5; }
+           padding: 8px 14px; border-radius: 8px; max-width: 90vw; z-index: 50; }
   .toast.bad { background: var(--bad); color: #fff; }
 </style>
 </head>
 <body>
 <header>
   <h1><span id="health" class="dot" title="готовность агента"></span> SRE-агент</h1>
+  <div id="status" class="row muted status" title="открыть настройки"></div>
   <div class="row">
-    <input id="by" placeholder="ваше имя (для аудита)" size="20" aria-label="имя для аудита">
-    <input id="token" type="password" placeholder="токен агента (если задан)" size="20" aria-label="токен агента">
+    <button id="openRun">Запустить агента</button>
+    <button id="openSettings" class="ghost">Настройки</button>
   </div>
 </header>
 
 <main>
   <section id="approvals" class="card hidden" aria-live="polite"></section>
-
-  <section class="card">
-    <div class="row" style="justify-content: space-between">
-      <div><h2>Режим действий</h2><div class="muted">Потолок для всех действий. Эффективный режим каждого действия — более строгий из потолка и своего.</div></div>
-      <div id="modes" class="modes"></div>
-    </div>
-    <div id="allowed" class="allowed"></div>
-  </section>
-
   <div class="cols">
     <aside class="card">
-      <div class="row">
-        <button id="runNow">Проверить сейчас</button>
-        <button id="incident" class="ghost">Объявить инцидент</button>
-      </div>
+      <h2>Запуски</h2>
+      <div id="filters" class="filters"></div>
       <div id="runs"><p class="muted">Загрузка…</p></div>
     </aside>
     <section id="detail" class="card"><p class="muted">Выберите запуск слева.</p></section>
   </div>
 </main>
 
+<dialog id="dlgTrace"><div class="dlghead"><h2 id="traceTitle">Ход работы</h2><button class="ghost" data-close>Закрыть</button></div><div id="traceBody" class="dlgbody"></div></dialog>
+<dialog id="dlgRun" class="narrow"><div class="dlghead"><h2>Запустить агента</h2><button class="ghost" data-close>Закрыть</button></div><div id="runBody" class="dlgbody"></div></dialog>
+<dialog id="dlgSettings" class="narrow"><div class="dlghead"><h2>Настройки</h2><button class="ghost" data-close>Закрыть</button></div><div id="settingsBody" class="dlgbody"></div></dialog>
 <div id="toast" class="toast hidden" role="status"></div>
 
 <script>
 (() => {
-  const $ = (s) => document.querySelector(s);
+  const $ = (s, root = document) => root.querySelector(s);
   const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const fmtTime = (t) => (t ? new Date(t).toLocaleTimeString('ru-RU') : '—');
-  const TRIGGER = { Alert: 'алерт', Schedule: 'по расписанию', Manual: 'вручную', Incident: 'инцидент' };
+  const fmtDate = (t) => (t ? new Date(t).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '—');
+  const fmtDur = (a, b) => { if (!a || !b) return '—'; const s = Math.round((new Date(b) - new Date(a)) / 1000); return s < 60 ? `${s} с` : `${Math.floor(s / 60)} мин ${s % 60} с`; };
+  const TRIGGER = { Alert: 'алерт', Schedule: 'расписание', Manual: 'вручную', Incident: 'инцидент' };
   const OUTCOME = { Resolved: 'решено', LimitsExhausted: 'лимит итераций', Escalated: 'эскалация', Failed: 'ошибка', Cancelled: 'отменён' };
   const MODES = ['DryRun', 'Approve', 'Auto'];
-  const MODE_TEXT = { DryRun: 'только описывать', Approve: 'с вашим одобрением', Auto: 'автоматически' };
+  const MODE_TEXT = { DryRun: 'только описывать действия', Approve: 'действия с вашим одобрением', Auto: 'действия автоматически' };
+  const AUTO_WARNING = 'Режим Auto: агент сможет выполнять разрешённые действия (перезапуск Deployment в sandbox) без вашего одобрения. Продолжить?';
 
-  let selected = null;
-  const openKeys = new Set();   // which iteration / sub-block cards are expanded (survives refreshes)
+  // What the page knows. Everything shown is drawn from here; the 3-second tick only refreshes it.
+  const state = { selected: null, filter: 'all', runs: [], actions: null, llm: null, trace: null, traceKey: '', reports: {} };
+  const openKeys = new Set();   // expanded sub-blocks in the details dialog (kept across refreshes)
   let toastTimer = null;
 
   // Per-viewer conveniences only: the token stays in this tab, the name remembers itself.
   const load = (store, key) => { try { return store.getItem(key) ?? ''; } catch { return ''; } };
   const save = (store, key, v) => { try { store.setItem(key, v); } catch { /* private window: fine */ } };
-  $('#token').value = load(sessionStorage, 'agent-token');
-  $('#by').value = load(localStorage, 'agent-by');
-  $('#token').addEventListener('input', (e) => save(sessionStorage, 'agent-token', e.target.value));
-  $('#by').addEventListener('input', (e) => save(localStorage, 'agent-by', e.target.value));
+  const token = () => load(sessionStorage, 'agent-token');
+  const who = () => load(localStorage, 'agent-by');
 
   function toast(msg, bad = false) {
     const t = $('#toast');
     t.textContent = msg;
     t.className = 'toast' + (bad ? ' bad' : '');
     clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => t.classList.add('hidden'), 4000);
+    toastTimer = setTimeout(() => t.classList.add('hidden'), 5000);
   }
 
   async function api(method, path, body) {
     const headers = {};
     if (body !== undefined) headers['Content-Type'] = 'application/json';
-    const token = $('#token').value.trim();
-    if (token) headers['X-Agent-Token'] = token;
+    if (token()) headers['X-Agent-Token'] = token();
     try {
       const res = await fetch(path, { method, headers, body: body !== undefined ? JSON.stringify(body) : undefined });
       const text = await res.text();
@@ -156,55 +172,31 @@
       return { ok: false, status: 0, data: { error: 'агент недоступен: ' + e.message } };
     }
   }
+  const errorOf = (r) => r.data?.error ?? (r.status === 401 ? 'нужен токен агента (Настройки)' : `ошибка ${r.status}`);
 
-  const statusText = (r) => (r.status === 'finished' ? (OUTCOME[r.outcome] ?? r.outcome ?? 'завершён')
-    : r.status === 'running' ? 'идёт' : 'в очереди');
+  const statusText = (r) => (r.status === 'finished' ? (OUTCOME[r.outcome] ?? r.outcome ?? 'завершён') : r.status === 'running' ? 'идёт' : 'в очереди');
   const statusClass = (r) => (r.status !== 'finished' ? 'chip run'
     : r.outcome === 'Resolved' ? 'chip ok' : (r.outcome === 'Escalated' || r.outcome === 'Failed') ? 'chip bad' : 'chip warn');
+  const trigger = (r) => `<span class="trg ${esc(r.trigger)}">${esc(TRIGGER[r.trigger] ?? r.trigger)}</span>`;
+  const modelText = (r) => [r.provider, r.model].filter(Boolean).join(' / ') || '—';
 
-  // Keyboard/mouse expansion state: remember it per card, so a refresh doesn't close what you opened.
   document.addEventListener('toggle', (e) => {
     const d = e.target;
     if (!(d instanceof HTMLDetailsElement) || !d.dataset.key) return;
     if (d.open) openKeys.add(d.dataset.key); else openKeys.delete(d.dataset.key);
   }, true);
-  const openAttr = (key) => (openKeys.has(key) ? ' open' : '');
+  document.addEventListener('click', (e) => { const b = e.target.closest('[data-close]'); if (b) b.closest('dialog').close(); });
 
-  async function renderHealth() {
-    const r = await api('GET', '/health/ready');
-    const dot = $('#health');
-    dot.className = 'dot ' + (r.ok ? 'ok' : 'bad');
-    dot.title = r.ok ? 'агент готов' : 'агент не отвечает';
+  // ---------- header ----------
+  function renderStatus() {
+    const a = state.actions, l = state.llm;
+    const mode = a?.mode ? `Режим по умолчанию: <b>${esc(a.mode)}</b>` : 'Действия выключены';
+    const llm = l ? `Модель: <b>${esc(l.default.provider)} / ${esc(l.default.model)}</b>` : '';
+    $('#status').innerHTML = `<span>${mode}</span><span>${llm}</span>`;
   }
 
-  async function renderMode() {
-    const r = await api('GET', '/actions');
-    const modes = $('#modes');
-    const allowed = $('#allowed');
-    if (!r.ok) { modes.innerHTML = `<span class="muted">${esc(r.data?.error ?? 'нет данных')}</span>`; allowed.innerHTML = ''; return; }
-    if (!r.data.mode) {
-      modes.innerHTML = '';
-      allowed.innerHTML = `<span class="muted">${esc(r.data.reason ?? 'действий нет: агент только наблюдает')}</span>`;
-      return;
-    }
-    modes.innerHTML = MODES.map((m) => `<button data-mode="${m}" aria-pressed="${r.data.mode === m}" class="${r.data.mode === m ? '' : 'ghost'}"
-      title="${esc(MODE_TEXT[m])}">${m}</button>`).join('');
-    const entries = Object.entries(r.data.allowed ?? {});
-    allowed.innerHTML = entries.map(([type, eff]) => `<span class="chip">${esc(type)}: <b>${esc(eff)}</b></span>`).join('')
-      || '<span class="muted">нет разрешённых действий</span>';
-  }
-
-  async function setMode(mode) {
-    if (mode === 'Auto' && !confirm('Автоматический режим: агент сможет выполнять разрешённые действия (перезапуск Deployment, удаление пода в sandbox) без вашего одобрения. Включить?')) return;
-    const r = await api('PUT', '/actions/mode', { mode, by: $('#by').value.trim() || 'console' });
-    if (r.ok) toast(`Потолок: ${r.data.previous} → ${r.data.mode}`);
-    else toast(r.data?.error ?? `ошибка ${r.status}`, true);
-    renderMode();
-  }
-
-  async function renderApprovals() {
-    const r = await api('GET', '/approvals');
-    const list = Array.isArray(r.data) ? r.data : [];
+  // ---------- approvals ----------
+  function renderApprovals(list) {
     const box = $('#approvals');
     box.classList.toggle('hidden', list.length === 0);
     box.innerHTML = list.length ? `<h2>Ждут вашего решения (${list.length})</h2>` + list.map((a) => `
@@ -217,39 +209,157 @@
         </div>
       </div>`).join('') : '';
   }
+  $('#approvals').addEventListener('click', async (e) => {
+    const b = e.target.closest('[data-approve]');
+    if (!b) return;
+    if (!who()) { toast('Укажите имя в Настройках: оно попадёт в аудит', true); openSettings(); return; }
+    const approve = b.dataset.v === 'true';
+    const r = await api('POST', `/approvals/${encodeURIComponent(b.dataset.approve)}`, { approve, by: who() });
+    toast(r.ok ? (approve ? 'Одобрено' : 'Отклонено') : errorOf(r), !r.ok);
+    tick(true);
+  });
 
-  async function decide(id, approve) {
-    const by = $('#by').value.trim();
-    if (!by) { toast('Укажите имя: оно попадёт в аудит', true); $('#by').focus(); return; }
-    const r = await api('POST', `/approvals/${encodeURIComponent(id)}`, { approve, by });
-    toast(r.ok ? (approve ? 'Одобрено' : 'Отклонено') : (r.data?.error ?? `ошибка ${r.status}`), !r.ok);
-    renderApprovals();
+  // ---------- run list ----------
+  function renderFilters() {
+    const counts = { all: state.runs.length };
+    for (const r of state.runs) counts[r.trigger] = (counts[r.trigger] ?? 0) + 1;
+    const items = [['all', 'все'], ['Alert', 'алерт'], ['Incident', 'инцидент'], ['Schedule', 'расписание'], ['Manual', 'вручную']];
+    $('#filters').innerHTML = items.map(([k, t]) => `<button data-filter="${k}" aria-pressed="${state.filter === k}">${t} ${counts[k] ?? 0}</button>`).join('');
+  }
+  function renderRuns() {
+    renderFilters();
+    const runs = state.runs.filter((r) => state.filter === 'all' || r.trigger === state.filter);
+    $('#runs').innerHTML = runs.length ? runs.map((run) => `
+      <button class="runitem ${run.id === state.selected ? 'sel' : ''}" data-run="${esc(run.id)}">
+        <span class="row">${trigger(run)}<span class="${statusClass(run)}">${esc(statusText(run))}</span><span class="muted">${fmtDate(run.queuedAt)}</span></span>
+        <span class="runhyp">${esc(run.hypothesis || run.triggerDetail || '…')}</span>
+        <span class="muted">${esc(modelText(run))} · итераций ${run.iterations}${run.mode ? ' · ' + esc(run.mode) : ''}</span>
+      </button>`).join('') : '<p class="muted">Запусков нет.</p>';
+  }
+  $('#filters').addEventListener('click', (e) => { const b = e.target.closest('[data-filter]'); if (b) { state.filter = b.dataset.filter; renderRuns(); } });
+  $('#runs').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-run]');
+    if (!b) return;
+    state.selected = b.dataset.run; state.trace = null; state.traceKey = '';
+    renderRuns(); tick(true);
+  });
+
+  // ---------- a tiny, safe Markdown renderer for the agent's reports ----------
+  // Everything is escaped first; only the few constructs the report writer produces become HTML.
+  function inline(text) {
+    return esc(text)
+      .replace(/`([^`]+)`/g, '<code>$1</code>')
+      .replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>')
+      .replace(/(^|[\s(])_([^_]+)_(?=$|[\s).,;:])/g, '$1<i>$2</i>');
+  }
+  function markdown(md) {
+    const lines = md.replace(/\r/g, '').split('\n');
+    const out = [];
+    let i = 0;
+    while (i < lines.length) {
+      const line = lines[i];
+      const fence = line.match(/^(`{3,})/);
+      if (fence) {
+        const body = [];
+        i++;
+        while (i < lines.length && !lines[i].startsWith(fence[1])) body.push(lines[i++]);
+        i++;
+        out.push(`<pre>${esc(body.join('\n'))}</pre>`);
+      } else if (/^#{1,4} /.test(line)) {
+        const level = line.match(/^#+/)[0].length;
+        out.push(`<h${level + 1}>${inline(line.replace(/^#+ /, ''))}</h${level + 1}>`);
+        i++;
+      } else if (line.startsWith('|')) {
+        const rows = [];
+        while (i < lines.length && lines[i].startsWith('|')) rows.push(lines[i++]);
+        const cells = (r) => r.replace(/^\||\|$/g, '').split(/(?<!\\)\|/).map((c) => c.trim().replace(/\\\|/g, '|'));
+        const body = rows.filter((r) => !/^\|[\s|:-]+\|?$/.test(r));
+        out.push('<div class="tablewrap"><table>' + body.map((r, n) => '<tr>' + cells(r).map((c) => (n === 0 ? `<th>${inline(c)}</th>` : `<td>${inline(c)}</td>`)).join('') + '</tr>').join('') + '</table></div>');
+      } else if (line.startsWith('- ')) {
+        const items = [];
+        while (i < lines.length && lines[i].startsWith('- ')) items.push(`<li>${inline(lines[i++].slice(2))}</li>`);
+        out.push(`<ul>${items.join('')}</ul>`);
+      } else if (line.trim() === '') {
+        i++;
+      } else {
+        const para = [];
+        while (i < lines.length && lines[i].trim() !== '' && !/^(#{1,4} |- |\||`{3,})/.test(lines[i])) para.push(inline(lines[i++]));
+        out.push(`<p>${para.join('<br>')}</p>`);
+      }
+    }
+    return out.join('');
   }
 
-  async function renderRuns() {
-    const r = await api('GET', '/runs');
-    const runs = Array.isArray(r.data) ? r.data : [];
-    if (!selected && runs.length) selected = runs[0].id;
-    $('#runs').innerHTML = !r.ok ? `<p class="bad">${esc(r.data?.error ?? 'нет связи')}</p>`
-      : runs.length ? runs.map((run) => `
-        <button class="run ${run.id === selected ? 'sel' : ''}" data-run="${esc(run.id)}">
-          <span class="${statusClass(run)}" style="justify-self:start">${esc(statusText(run))}</span>
-          <span class="muted">${fmtTime(run.queuedAt)} · ${esc(TRIGGER[run.trigger] ?? run.trigger)} · итераций ${run.iterations}</span>
-          <span class="runhyp">${esc(run.hypothesis || '…')}</span>
-        </button>`).join('')
-      : '<p class="muted">Запусков пока нет.</p>';
+  // ---------- session ----------
+  async function loadSession(force) {
+    const id = state.selected;
+    if (!id) return;
+    const listed = state.runs.find((r) => r.id === id);
+    const key = listed ? `${id}:${listed.status}:${listed.iterations}` : '';
+    // A finished run does not change: load it once. A running one is reloaded every tick (new iterations).
+    if (!force && state.trace && state.traceKey === key && listed?.status === 'finished') return;
+    const r = await api('GET', `/runs/${encodeURIComponent(id)}/trace`);
+    if (id !== state.selected) return;
+    if (!r.ok) { $('#detail').innerHTML = `<p class="bad">${esc(r.data?.error ?? `запуск не найден (${r.status})`)}</p>`; return; }
+    state.trace = r.data; state.traceKey = key;
+    if (r.data.run.status === 'finished' && r.data.run.reportPath && state.reports[id] === undefined) {
+      try {
+        const res = await fetch(`/runs/${encodeURIComponent(id)}/report`);
+        state.reports[id] = res.ok ? await res.text() : null;
+      } catch { state.reports[id] = null; }
+    }
+    if (id !== state.selected) return;
+    renderSession();
+    if ($('#dlgTrace').open) renderTrace();
   }
 
+  function renderSession() {
+    const { run, iterations } = state.trace;
+    const running = run.status !== 'finished';
+    const last = iterations[iterations.length - 1];
+    const interim = running
+      ? `<div class="interim"><b>Агент работает.</b> ${last
+          ? `Промежуточный результат после итерации ${last.number}: ${esc(last.hypothesis)}<div class="muted">${esc(last.summary)}</div><div class="muted">Проверка завершения: ${esc(last.completionReason)}</div>`
+          : 'Идёт первая итерация: результат появится, когда она закончится.'}</div>`
+      : '';
+    const report = state.reports[run.id];
+    const reportHtml = running ? ''
+      : report ? `<div class="report">${markdown(report)}</div>`
+      : `<p class="muted">${run.reportPath ? 'Отчёт не удалось загрузить.' : 'У этого запуска нет отчёта.'}</p>`;
+    $('#detail').innerHTML = `
+      <div class="dhead">
+        <div>
+          <h2>${trigger(run)} ${esc(run.triggerDetail || '')}</h2>
+          <div class="meta">
+            <span class="chip">начат ${fmtDate(run.queuedAt)}</span>
+            <span class="chip">длительность ${running ? '…' : fmtDur(run.queuedAt, run.finishedAt)}</span>
+            <span class="chip">модель ${esc(modelText(run))}</span>
+            <span class="chip">режим ${esc(run.mode ?? 'по умолчанию')}</span>
+            <span class="chip">итераций ${running ? iterations.length : run.iterations}</span>
+          </div>
+        </div>
+        <div class="row">
+          <button id="openTrace" class="ghost">Подробно: ход работы (${iterations.length})</button>
+          ${run.reportPath ? `<a class="ghost" href="/runs/${encodeURIComponent(run.id)}/report" target="_blank" rel="noopener">Markdown</a>` : ''}
+        </div>
+      </div>
+      <div class="verdict"><span class="${statusClass(run)}">${esc(statusText(run))}</span> ${run.outcomeReason ? esc(run.outcomeReason) : ''}</div>
+      <details class="sub" data-key="goal:${esc(run.id)}"${openKeys.has('goal:' + run.id) ? ' open' : ''}><summary>Задача агента</summary><p class="muted">${esc(run.goal ?? '—')}</p><p class="muted">id: <code>${esc(run.id)}</code></p></details>
+      ${interim}${reportHtml}`;
+  }
+  $('#detail').addEventListener('click', (e) => { if (e.target.closest('#openTrace')) { renderTrace(); $('#dlgTrace').showModal(); } });
+
+  // ---------- details dialog: every iteration with its intermediate result ----------
   const list = (title, items) => (items && items.length
     ? `<div><b>${esc(title)}</b><ul class="plain">${items.map((x) => `<li>${esc(x)}</li>`).join('')}</ul></div>` : '');
-
-  const sub = (key, title, html) => `<details class="sub" data-key="${esc(key)}"${openAttr(key)}><summary>${esc(title)}</summary>${html}</details>`;
+  const sub = (key, title, html) => `<details class="sub" data-key="${esc(key)}"${openKeys.has(key) ? ' open' : ''}><summary>${esc(title)}</summary>${html}</details>`;
 
   function actionBlock(a) {
     const snap = (s) => (s ? `<div class="muted">${esc(s)}</div>` : '');
     return `<div class="action">
       <div><b>Действие:</b> ${esc(a.type)} → <code>${esc(a.target)}</code> · режим ${esc(a.mode)} · статус <b>${esc(a.status)}</b>
         ${a.effect !== 'NotMeasured' ? ` · эффект ${esc(a.effect)}` : ''}${a.approvedBy ? ` · одобрил ${esc(a.approvedBy)}` : ''}</div>
+      <div class="muted">Обоснование модели: ${esc(a.reason)}</div>
       <div>${esc(a.detail)}</div>
       ${snap(a.before ? 'до: ' + a.before : '')}${snap(a.after ? 'после: ' + a.after : '')}
       <ul class="checks">${(a.checks ?? []).map((c) => `<li class="${c.passed ? 'ok' : 'bad'}">${c.passed ? '✓' : '✗'} ${esc(c.name)}: ${esc(c.detail)}</li>`).join('')}</ul>
@@ -258,89 +368,215 @@
 
   function iterationCard(runId, i) {
     const key = `${runId}:${i.number}`;
-    const actChip = i.action ? `<span class="chip ${i.action.status === 'Executed' ? 'ok' : i.action.status === 'Refused' ? '' : 'warn'}">${esc(i.action.type)}: ${esc(i.action.status)}</span>` : '';
     const tools = (i.toolCalls ?? []).map((c) => `<li><code>${esc(c.tool)}</code>(${esc(c.arguments)})${c.failed ? ' <span class="bad">ошибка</span>' : ''}
       <pre>${esc(c.resultPreview)}</pre></li>`).join('');
-    return `<details class="it" data-key="${esc(key)}"${openAttr(key)}>
-      <summary>
-        <span class="num">${i.number}</span>
-        <span class="hyp" title="${esc(i.hypothesis)}">${esc(i.hypothesis)}</span>
-        <span class="chips">
-          <span class="chip">уверенность: ${esc(i.confidence)}</span>${actChip}
-          <span class="chip ${i.done ? 'ok' : ''}">${i.done ? 'решено' : 'не решено'}</span>
-          <span class="chip">${esc(fmtTime(i.startedAt))}</span>
-        </span>
-      </summary>
-      <div class="body">
-        <p>${esc(i.summary)}</p>
-        ${list('Свидетельства', i.evidence)}${list('Рекомендации', i.recommendations)}${list('Что проверить дальше', i.nextChecks)}${list('Факты, подтверждённые в этой итерации', i.facts)}
-        <p class="muted">Проверка завершения (код, не модель): ${esc(i.completionReason)} · ${Number(i.durationSeconds).toFixed(1)} с · токены ${i.inputTokens}/${i.outputTokens} · модель ${esc(i.model)}</p>
-        ${i.action ? actionBlock(i.action) : ''}
-        <p class="muted">Lead: ${esc(i.lead)}</p>
-        ${tools ? sub(`${key}:tools`, `Вызовы инструментов (${i.toolCalls.length})`, `<ul class="plain">${tools}</ul>`) : ''}
-        ${sub(`${key}:thinking`, 'Ход рассуждения (сырой ответ модели)', `<pre>${esc(i.thinking)}</pre>`)}
-        ${sub(`${key}:observed`, 'Что увидел код (R: наблюдения до вызова модели)', `<pre>${esc(i.observations)}</pre>`)}
+    return `<div class="it">
+      <div class="ithead">
+        <span class="num">Итерация ${i.number}</span>
+        <span class="chip">${esc(fmtTime(i.startedAt))} · ${Number(i.durationSeconds).toFixed(0)} с</span>
+        <span class="chip">уверенность: ${esc(i.confidence)}</span>
+        ${i.action ? `<span class="chip ${i.action.status === 'Executed' ? 'ok' : 'warn'}">${esc(i.action.type)}: ${esc(i.action.status)}</span>` : ''}
+        <span class="chip ${i.done ? 'ok' : ''}">${i.done ? 'задача решена' : 'не решена'}</span>
       </div>
-    </details>`;
+      <p><b>${esc(i.hypothesis)}</b></p>
+      <p>${esc(i.summary)}</p>
+      ${i.action ? actionBlock(i.action) : ''}
+      <p class="muted">Проверка завершения (код, не модель): ${esc(i.completionReason)}</p>
+      ${sub(`${key}:result`, 'Свидетельства, факты, рекомендации', `${list('Свидетельства', i.evidence)}${list('Факты, подтверждённые в этой итерации', i.facts)}${list('Рекомендации', i.recommendations)}${list('Что проверить дальше', i.nextChecks)}
+        <p class="muted">Lead: ${esc(i.lead)} · токены ${i.inputTokens}/${i.outputTokens} · модель ${esc(i.model)}</p>`)}
+      ${tools ? sub(`${key}:tools`, `Вызовы инструментов (${i.toolCalls.length})`, `<ul class="plain">${tools}</ul>`) : ''}
+      ${sub(`${key}:thinking`, 'Ход рассуждения (сырой ответ модели)', `<pre>${esc(i.thinking)}</pre>`)}
+      ${sub(`${key}:observed`, 'Что увидел код до вызова модели (R)', `<pre>${esc(i.observations)}</pre>`)}
+    </div>`;
   }
 
-  async function renderRun() {
-    const box = $('#detail');
-    if (!selected) { box.innerHTML = '<p class="muted">Выберите запуск слева.</p>'; return; }
-    const r = await api('GET', `/runs/${encodeURIComponent(selected)}/trace`);
-    if (!r.ok) { box.innerHTML = `<p class="bad">${esc(r.data?.error ?? `запуск не найден (${r.status})`)}</p>`; return; }
-    const { run, iterations } = r.data;
+  function renderTrace() {
+    if (!state.trace) return;
+    const { run, iterations } = state.trace;
     const running = run.status !== 'finished';
-    const note = iterations.length ? ''
-      : (running ? '<p class="muted">Первая итерация ещё идёт: ход рассуждений появится, когда она закончится.</p>'
-        : '<p class="muted">Ход рассуждений этого запуска не сохранён (запуск был до последнего перезапуска агента). Полный текст — в отчёте.</p>');
-    box.innerHTML = `
-      <div class="dhead">
-        <div>
-          <h2>Запуск <code>${esc(run.id)}</code></h2>
-          <div class="muted">${esc(TRIGGER[run.trigger] ?? run.trigger)} · ${fmtTime(run.queuedAt)} · итераций: ${run.iterations}${running ? ' · <span class="run">идёт</span>' : ''}</div>
-        </div>
-        <a class="ghost" href="/runs/${encodeURIComponent(run.id)}/report" target="_blank" rel="noopener">отчёт (Markdown)</a>
-      </div>
-      <div class="verdict"><b>${esc(statusText(run))}</b>${run.outcomeReason ? ' — ' + esc(run.outcomeReason) : ''}</div>
-      ${note}
-      ${iterations.map((i) => iterationCard(run.id, i)).join('')}`;
+    $('#traceTitle').innerHTML = `Ход работы · ${trigger(run)} ${fmtDate(run.queuedAt)}`;
+    $('#traceBody').innerHTML = (iterations.length ? iterations.map((i) => iterationCard(run.id, i)).join('')
+      : `<p class="muted">${running ? 'Первая итерация ещё идёт.' : 'Итерации этого запуска не сохранились (он был до включения истории). Смотрите отчёт.'}</p>`)
+      + (running ? `<p class="run">Идёт итерация ${iterations.length + 1}…</p>` : '');
   }
 
-  // A click on a run only changes which run the detail pane shows.
-  $('#runs').addEventListener('click', (e) => {
-    const b = e.target.closest('[data-run]');
-    if (!b) return;
-    selected = b.dataset.run;
-    renderRuns();
-    renderRun();
+  // ---------- model picker (shared by the run dialog and the settings) ----------
+  const providerOptions = (selected) => (state.llm?.providers ?? []).map((p) =>
+    `<option value="${esc(p.name)}"${p.name === selected ? ' selected' : ''}>${esc(p.name)}${p.requiresKey && !p.keySet ? ' (нет ключа)' : ''}</option>`).join('');
+  function fillModels(root, provider, value) {
+    const p = (state.llm?.providers ?? []).find((x) => x.name === provider);
+    $('[data-models]', root).innerHTML = (p?.models ?? []).map((m) => `<option value="${esc(m)}"></option>`).join('');
+    const input = $('[data-model]', root);
+    input.value = value ?? (p && provider === state.llm.default.provider ? state.llm.default.model : (p?.models[0] ?? ''));
+    input.placeholder = p?.anyModel ? 'id модели провайдера' : 'модель из списка';
+  }
+  async function refreshModels(root) {
+    const provider = $('[data-provider]', root).value;
+    const r = await api('GET', `/llm/providers/${encodeURIComponent(provider)}/models`);
+    if (r.ok && r.data.models?.length) $('[data-models]', root).innerHTML = r.data.models.map((m) => `<option value="${esc(m)}"></option>`).join('');
+    toast(r.ok && !r.data.error ? `Моделей у провайдера: ${r.data.models.length}` : (r.data?.error ?? errorOf(r)), !(r.ok && !r.data.error));
+  }
+  const modelPicker = (id) => `
+    <div class="row">
+      <label class="grow">Провайдер<select data-provider>${providerOptions(state.llm?.default.provider)}</select></label>
+      <label class="grow">Модель<input data-model list="${id}" autocomplete="off"><datalist id="${id}" data-models></datalist></label>
+      <button type="button" class="ghost" data-refresh title="спросить список моделей у провайдера" style="align-self:end">Список</button>
+    </div>`;
+  function wirePicker(root) {
+    fillModels(root, $('[data-provider]', root).value);
+    $('[data-provider]', root).addEventListener('change', (e) => fillModels(root, e.target.value));
+    $('[data-refresh]', root).addEventListener('click', () => refreshModels(root));
+  }
+
+  // ---------- run dialog ----------
+  function openRun() {
+    const globalMode = state.actions?.mode;
+    $('#runBody').innerHTML = `
+      <label>Что запустить
+        <select id="runKind">
+          <option value="check">Проверка состояния (одна итерация)</option>
+          <option value="incident">Инцидент (работает, пока система не вернётся в норму)</option>
+        </select>
+      </label>
+      <label>Комментарий: что случилось или зачем запуск (попадёт в отчёт)<input id="runNote" maxlength="300" placeholder="например: пользователи жалуются на ошибки"></label>
+      <fieldset><legend>Модель</legend>${modelPicker('runModels')}</fieldset>
+      <fieldset><legend>Режим действий в этом запуске</legend>
+        ${globalMode ? `<div class="row" id="runModes">
+            <button type="button" class="ghost" data-runmode="" aria-pressed="true">По умолчанию (${esc(globalMode)})</button>
+            ${MODES.map((m) => `<button type="button" class="ghost" data-runmode="${m}" aria-pressed="false" title="${esc(MODE_TEXT[m])}">${m}</button>`).join('')}
+          </div>
+          <div class="muted" id="runModeHint">Как у запусков по алерту и расписанию.</div>`
+        : '<div class="muted">Действия не настроены: агент только наблюдает.</div>'}
+      </fieldset>
+      <div class="row" style="justify-content:flex-end"><button id="runStart">Запустить</button></div>`;
+    const body = $('#runBody');
+    wirePicker(body);
+    let mode = '';
+    $('#runModes')?.addEventListener('click', (e) => {
+      const b = e.target.closest('[data-runmode]');
+      if (!b) return;
+      mode = b.dataset.runmode;
+      for (const x of body.querySelectorAll('[data-runmode]')) x.setAttribute('aria-pressed', String(x === b));
+      $('#runModeHint').textContent = mode ? `${MODE_TEXT[mode]}. Свой режим каждого действия всё равно действует (delete_pod остаётся с одобрением).` : 'Как у запусков по алерту и расписанию.';
+    });
+    $('#runStart').addEventListener('click', async () => {
+      if (mode === 'Auto' && !confirm(AUTO_WARNING)) return;
+      const note = $('#runNote').value.trim();
+      const request = { provider: $('[data-provider]', body).value, model: $('[data-model]', body).value.trim() || null, note: note || null };
+      if ($('#runKind').value === 'incident') request.incident = true;
+      if (mode) request.mode = mode;
+      const r = await api('POST', '/runs', request);
+      if (!r.ok) { toast(errorOf(r), true); return; }
+      $('#dlgRun').close();
+      state.selected = r.data.runId; state.trace = null; state.filter = 'all';
+      toast('Запуск начат');
+      tick(true);
+    });
+    $('#dlgRun').showModal();
+  }
+  $('#openRun').addEventListener('click', openRun);
+
+  // ---------- settings dialog ----------
+  function renderSettings() {
+    const a = state.actions, l = state.llm;
+    const allowed = Object.entries(a?.allowed ?? {}).map(([type, eff]) => `<span class="chip">${esc(type)}: <b>${esc(eff)}</b></span>`).join('');
+    const keyText = (p) => (p.keySource === 'runtime' ? 'ключ задан здесь (в памяти агента, до перезапуска)' : p.keySource === 'config' ? 'ключ из Secret' : p.requiresKey ? 'ключ не задан' : 'ключ не нужен');
+    $('#settingsBody').innerHTML = `
+      <fieldset><legend>Вы</legend>
+        <label>Имя (попадает в аудит одобрений и смены режима)<input id="setBy" value="${esc(who())}"></label>
+        <label>Токен агента (если включён Agent__ApiToken; хранится только в этой вкладке)<input id="setToken" type="password" value="${esc(token())}" autocomplete="off"></label>
+      </fieldset>
+      <fieldset><legend>Режим действий по умолчанию (алерты, расписание)</legend>
+        ${a?.mode ? `<div class="row" id="setModes">${MODES.map((m) => `<button type="button" data-mode="${m}" aria-pressed="${a.mode === m}" class="${a.mode === m ? '' : 'ghost'}" title="${esc(MODE_TEXT[m])}">${m}</button>`).join('')}</div>
+          <div class="row">${allowed}</div>
+          <div class="muted">Эффективный режим действия — более строгий из этого потолка и собственного режима действия. После перезапуска агента возвращается значение из values.</div>`
+        : `<div class="muted">${esc(a?.reason ?? 'Действия не настроены: агент только наблюдает.')}</div>`}
+      </fieldset>
+      <fieldset id="setDefault"><legend>Модель по умолчанию (алерты, расписание)</legend>
+        ${modelPicker('setModels')}
+        <div class="row" style="justify-content:flex-end"><button type="button" id="saveDefault">Сделать моделью по умолчанию</button></div>
+      </fieldset>
+      <fieldset><legend>Провайдеры и ключи</legend>
+        ${(l?.providers ?? []).map((p) => `
+          <div class="prov">
+            <div><b>${esc(p.name)}</b> <span class="muted">${esc(p.baseUrl)}</span></div>
+            <div class="muted">${esc(keyText(p))}${p.anyModel ? ' · любая модель провайдера' : ' · модели: ' + esc(p.models.join(', '))}</div>
+            <div class="row">
+              <input class="grow" type="password" data-key="${esc(p.name)}" placeholder="API-ключ" autocomplete="off">
+              <button type="button" data-savekey="${esc(p.name)}">Сохранить ключ</button>
+              ${p.keySource === 'runtime' ? `<button type="button" class="danger" data-dropkey="${esc(p.name)}">Забыть</button>` : ''}
+            </div>
+          </div>`).join('')}
+        <div class="muted">Ключ уходит в агент и хранится только в его памяти: на диск не пишется, в API не возвращается. Новые провайдеры (адрес, список моделей) добавляются в values агента — <code>Llm__Providers__имя__BaseUrl</code> — вместе с разрешением исходящего трафика в NetworkPolicy; см. docs/17.</div>
+      </fieldset>`;
+    wirePicker($('#setDefault'));
+  }
+  async function openSettings() { await refreshSettings(); $('#dlgSettings').showModal(); }
+  async function refreshSettings() { await loadShared(); renderSettings(); renderStatus(); }
+  $('#openSettings').addEventListener('click', openSettings);
+  $('#status').addEventListener('click', openSettings);
+  $('#settingsBody').addEventListener('input', (e) => {
+    if (e.target.id === 'setBy') save(localStorage, 'agent-by', e.target.value.trim());
+    if (e.target.id === 'setToken') save(sessionStorage, 'agent-token', e.target.value.trim());
   });
-  $('#modes').addEventListener('click', (e) => {
-    const b = e.target.closest('[data-mode]');
-    if (b) setMode(b.dataset.mode);
-  });
-  $('#approvals').addEventListener('click', (e) => {
-    const b = e.target.closest('[data-approve]');
-    if (b) decide(b.dataset.approve, b.dataset.v === 'true');
+  $('#settingsBody').addEventListener('click', async (e) => {
+    const body = $('#settingsBody');
+    const modeBtn = e.target.closest('[data-mode]');
+    if (modeBtn) {
+      const mode = modeBtn.dataset.mode;
+      if (mode === 'Auto' && !confirm(AUTO_WARNING)) return;
+      const r = await api('PUT', '/actions/mode', { mode, by: who() || 'console' });
+      toast(r.ok ? `Режим по умолчанию: ${r.data.previous} → ${r.data.mode}` : errorOf(r), !r.ok);
+      return refreshSettings();
+    }
+    if (e.target.closest('#saveDefault')) {
+      const root = $('#setDefault');
+      const r = await api('PUT', '/llm/default', { provider: $('[data-provider]', root).value, model: $('[data-model]', root).value.trim() || null });
+      toast(r.ok ? `Модель по умолчанию: ${r.data.provider} / ${r.data.model}` : errorOf(r), !r.ok);
+      return refreshSettings();
+    }
+    const saveKey = e.target.closest('[data-savekey]');
+    const dropKey = e.target.closest('[data-dropkey]');
+    if (saveKey || dropKey) {
+      const name = (saveKey ?? dropKey).dataset.savekey ?? dropKey.dataset.dropkey;
+      const value = saveKey ? $(`[data-key="${CSS.escape(name)}"]`, body).value.trim() : '';
+      if (saveKey && !value) { toast('Введите ключ', true); return; }
+      const r = await api('PUT', `/llm/providers/${encodeURIComponent(name)}/key`, { apiKey: value });
+      toast(r.ok ? (saveKey ? `Ключ для ${name} сохранён в памяти агента` : `Ключ для ${name} забыт`) : errorOf(r), !r.ok);
+      return refreshSettings();
+    }
   });
 
-  async function startRun(body) {
-    const r = await api('POST', '/runs', body);
-    if (r.ok) { selected = r.data.runId; toast('Запуск начат'); renderRuns(); renderRun(); }
-    else toast(r.data?.error ?? (r.status === 401 ? 'нужен токен агента' : `ошибка ${r.status}`), true);
+  // ---------- refresh loop ----------
+  async function loadShared() {
+    const [a, l] = await Promise.all([api('GET', '/actions'), api('GET', '/llm')]);
+    if (a.ok) state.actions = a.data;
+    if (l.ok) state.llm = l.data;
   }
-  $('#runNow').addEventListener('click', () => startRun({}));
-  $('#incident').addEventListener('click', () => {
-    const note = prompt('Что случилось? Одна фраза: она попадёт в запуск и отчёт.');
-    if (note && note.trim()) startRun({ incident: true, note: note.trim() });
-  });
-
-  // Live: one refresh per 3 s, never two at once. Heavy parts only redraw what changed.
-  async function tick() {
-    await Promise.all([renderHealth(), renderMode(), renderApprovals(), renderRuns(), renderRun()]);
-    setTimeout(tick, 3000);
+  let ticking = false;
+  async function tick(force = false) {
+    if (ticking) return;
+    ticking = true;
+    try {
+      const [health, approvals, runs] = await Promise.all([api('GET', '/health/ready'), api('GET', '/approvals'), api('GET', '/runs'), loadShared()]);
+      $('#health').className = 'dot ' + (health.ok ? 'ok' : 'bad');
+      $('#health').title = health.ok ? 'агент готов' : 'агент не отвечает';
+      renderStatus();
+      renderApprovals(Array.isArray(approvals.data) ? approvals.data : []);
+      if (runs.ok && Array.isArray(runs.data)) {
+        state.runs = runs.data;
+        if (!state.selected && runs.data.length) state.selected = runs.data[0].id;
+        renderRuns();
+      } else if (!runs.ok) {
+        $('#runs').innerHTML = `<p class="bad">${esc(errorOf(runs))}</p>`;
+      }
+      await loadSession(force);
+    } finally {
+      ticking = false;
+    }
   }
-  tick();
+  tick(true);
+  setInterval(() => tick(false), 3000);
 })();
 </script>
 </body>

@@ -103,7 +103,7 @@ public sealed class RalfIteration(
                 // and facts: it becomes a Failed action record, and nothing was executed.
                 await audit.WriteAsync(new AuditEvent(time.GetUtcNow(), task.Id, number, "action.lead_failed",
                     new { proposal.Type, proposal.Target, error = $"{ex.GetType().Name}: {ex.Message}" }), CancellationToken.None);
-                action = new ActionRecord(number, time.GetUtcNow(), proposal, lead.Settings.Mode, ActionStatus.Failed,
+                action = new ActionRecord(number, time.GetUtcNow(), proposal, task.Mode ?? lead.Settings.Mode, ActionStatus.Failed,
                     $"could not process the proposal: {ex.GetType().Name}: {ex.Message}", []);
             }
             leadText = $"{proposal.Type} {proposal.Target}: {action.Status} ({action.Mode})" +

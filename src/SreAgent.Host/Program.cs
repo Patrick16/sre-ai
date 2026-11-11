@@ -41,6 +41,8 @@ if (actions.Allowed.Count > 0)
     builder.Services.AddSingleton<Guardrails>();
     builder.Services.AddSingleton<ActionLead>();
 }
+builder.Services.AddSingleton(sp => new RunHistory(
+    Path.Combine(sp.GetRequiredService<IOptions<AgentOptions>>().Value.DataDir, "runs"), sp.GetRequiredService<ILogger<RunHistory>>()));
 builder.Services.AddSingleton<RunTraceStore>();
 builder.Services.AddSingleton<IRunObserver>(sp => sp.GetRequiredService<RunTraceStore>());
 builder.Services.AddSingleton<RalfIteration>();
@@ -65,6 +67,8 @@ var app = builder.Build();
     var o = app.Services.GetRequiredService<IOptions<AgentOptions>>().Value;
     var removed = DataRetention.PruneOldFiles(Path.Combine(o.DataDir, "state"), TimeSpan.FromDays(o.StateRetentionDays), DateTime.UtcNow);
     if (removed > 0) app.Logger.LogInformation("Removed {Count} RunState file(s) older than {Days} days", removed, o.StateRetentionDays);
+    // Before RunQueue is created (it loads what is left): the console's run list and traces.
+    DataRetention.PruneOldFiles(Path.Combine(o.DataDir, "runs"), TimeSpan.FromDays(o.HistoryRetentionDays), DateTime.UtcNow);
 }
 
 app.UseOpenTelemetryPrometheusScrapingEndpoint(ctx => ctx.Connection.LocalPort == 9090 && ctx.Request.Path == "/metrics");
@@ -72,7 +76,7 @@ app.MapHealthChecks("/health/live");
 app.MapHealthChecks("/health/ready");
 
 app.MapPost("/webhooks/alertmanager", (AlertmanagerWebhook payload, AlertInbox inbox, RunQueue queue, AgentMetrics metrics,
-    IOptions<AgentOptions> options, TimeProvider time, ILogger<AlertInbox> logger) =>
+    OpenAiCompatibleChatClientFactory llm, IOptions<AgentOptions> options, TimeProvider time, ILogger<AlertInbox> logger) =>
 {
     var o = options.Value;
     foreach (var alert in payload.Alerts)
@@ -99,7 +103,7 @@ app.MapPost("/webhooks/alertmanager", (AlertmanagerWebhook payload, AlertInbox i
     }
 
     var task = queue.NewTask(new TriggerEvent(TriggerKind.Alert, firing, null, time.GetUtcNow()), Goals.ForAlerts(o.Namespace, firing));
-    if (queue.TryEnqueue(new RunRequest(task, null)))
+    if (queue.TryEnqueue(RunRequest.For(task, llm)))
     {
         queue.RememberHandled(fingerprints);
         return Results.Ok(new { started = true, runId = task.Id });
@@ -112,18 +116,29 @@ app.MapPost("/webhooks/alertmanager", (AlertmanagerWebhook payload, AlertInbox i
 // Manual run: POST /runs  {"goal": "...", "model": "qwen/qwen3.5-9b"}  (both optional) - a one-iteration health check.
 // Incident:   POST /runs  {"incident": true, "note": "users report errors on the site"} - works until steady state,
 //             like an alert run (Phase 9: game days declare incidents instead of waiting 10-30 min for a burn-rate page).
-app.MapPost("/runs", (HttpContext http, ManualRun? body, RunQueue queue, OpenAiCompatibleChatClientFactory llm, IOptions<AgentOptions> options, TimeProvider time) =>
+//             optional for both: "provider" + "model" (GET /llm lists them) and "mode" (DryRun | Approve | Auto) - the
+//             action ceiling of THIS run instead of the global one; an action's own mode still applies.
+app.MapPost("/runs", (HttpContext http, ManualRun? body, RunQueue queue, OpenAiCompatibleChatClientFactory llm, IServiceProvider sp, IOptions<AgentOptions> options, TimeProvider time) =>
 {
     if (!ApiToken.IsValid(options.Value.ApiToken, http.Request.Headers[ApiToken.Header])) return Results.Unauthorized();
     var ns = options.Value.Namespace;
-    if (body?.Model is { Length: > 0 } m && !llm.Models.Contains(m, StringComparer.OrdinalIgnoreCase))
-        return Results.BadRequest(new { error = $"model '{m}' is not allowed", allowed = llm.Models });
+    var spec = LlmRef.Format(body?.Provider, body?.Model);
+    if (spec is not null && llm.Resolve(spec).Error is { } llmError) return Results.BadRequest(new { error = llmError });
+    ActionMode? mode = null;
+    if (!string.IsNullOrWhiteSpace(body?.Mode))
+    {
+        if (!Enum.TryParse<ActionMode>(body.Mode, ignoreCase: true, out var parsed) || !Enum.IsDefined(parsed))
+            return Results.BadRequest(new { error = $"mode must be one of: {string.Join(", ", Enum.GetNames<ActionMode>())}" });
+        if (sp.GetService<ActionSettings>() is null)
+            return Results.BadRequest(new { error = "no action is allowlisted (Actions__Allowed__*): a run cannot have an action mode" });
+        mode = parsed;
+    }
     var task = body?.Incident == true
         ? queue.NewTask(new TriggerEvent(TriggerKind.Incident, [], body.Note ?? "incident declared by a human", time.GetUtcNow()),
-            string.IsNullOrWhiteSpace(body.Goal) ? Goals.ForIncident(ns, body.Note) : body.Goal)
-        : queue.NewTask(new TriggerEvent(TriggerKind.Manual, [], "started by a human", time.GetUtcNow()),
-            string.IsNullOrWhiteSpace(body?.Goal) ? Goals.HealthCheck(ns) : body.Goal);
-    return queue.TryEnqueue(new RunRequest(task, body?.Model))
+            string.IsNullOrWhiteSpace(body.Goal) ? Goals.ForIncident(ns, body.Note) : body.Goal, mode: mode)
+        : queue.NewTask(new TriggerEvent(TriggerKind.Manual, [], string.IsNullOrWhiteSpace(body?.Note) ? "started by a human" : body.Note, time.GetUtcNow()),
+            string.IsNullOrWhiteSpace(body?.Goal) ? Goals.HealthCheck(ns) : body.Goal, mode: mode);
+    return queue.TryEnqueue(RunRequest.For(task, llm, spec))
         ? Results.Accepted($"/runs/{task.Id}", new { runId = task.Id })
         : Results.Conflict(new { error = $"run {queue.ActiveRunFor(ns)} is already active for {ns}" });
 });
@@ -139,6 +154,31 @@ app.MapGet("/runs/{id}/report", (string id, RunQueue queue) =>
         : Results.NotFound());
 app.MapGet("/models", (OpenAiCompatibleChatClientFactory llm, IOptions<LlmOptions> o) => new { @default = o.Value.Model, allowed = llm.Models });
 app.MapGet("/alerts", (AlertInbox inbox) => inbox.Latest());
+
+// LLM providers. Which providers exist (and their URLs) is configuration; a human may choose among them, pick the
+// default model for runs that don't choose (alerts, schedule) and supply a key. Keys are write-only: no endpoint
+// returns one, they are not logged, and a key set here lives in memory until the agent restarts.
+app.MapGet("/llm", (OpenAiCompatibleChatClientFactory llm) =>
+    new { @default = new { provider = llm.Default.Provider, model = llm.Default.Model }, providers = llm.Providers });
+app.MapGet("/llm/providers/{name}/models", async (string name, OpenAiCompatibleChatClientFactory llm, CancellationToken ct) =>
+{
+    var (models, error) = await llm.ListModelsAsync(name, ct);
+    return Results.Ok(new { models, error });
+});
+app.MapPut("/llm/default", (HttpContext http, LlmChoice body, OpenAiCompatibleChatClientFactory llm, IOptions<AgentOptions> options, ILogger<OpenAiCompatibleChatClientFactory> logger) =>
+{
+    if (!ApiToken.IsValid(options.Value.ApiToken, http.Request.Headers[ApiToken.Header])) return Results.Unauthorized();
+    if (llm.SetDefault(body.Provider, body.Model) is { } error) return Results.BadRequest(new { error });
+    logger.LogWarning("Default LLM changed to {Provider} / {Model}", llm.Default.Provider, llm.Default.Model);
+    return Results.Ok(new { provider = llm.Default.Provider, model = llm.Default.Model });
+});
+app.MapPut("/llm/providers/{name}/key", (HttpContext http, string name, KeyBody body, OpenAiCompatibleChatClientFactory llm, IOptions<AgentOptions> options, ILogger<OpenAiCompatibleChatClientFactory> logger) =>
+{
+    if (!ApiToken.IsValid(options.Value.ApiToken, http.Request.Headers[ApiToken.Header])) return Results.Unauthorized();
+    if (!llm.SetKey(name, body.ApiKey)) return Results.NotFound(new { error = $"provider '{name}' is not configured" });
+    logger.LogWarning("API key of LLM provider {Provider} was {Change} at runtime", name, string.IsNullOrWhiteSpace(body.ApiKey) ? "removed" : "set");
+    return Results.Ok(new { provider = name, keySet = llm.Providers.First(p => p.Name.Equals(name, StringComparison.OrdinalIgnoreCase)).KeySet });
+});
 
 // Approve mode: what waits for a human, and the decision.
 app.MapGet("/actions", (IServiceProvider sp) => sp.GetService<ActionSettings>() is { } s
@@ -177,7 +217,11 @@ app.MapPost("/approvals/{id}", (HttpContext http, string id, ApprovalBody body, 
 
 app.Run();
 
-record ManualRun(string? Goal, string? Model, bool? Incident, string? Note);
+record ManualRun(string? Goal, string? Model, bool? Incident, string? Note, string? Provider = null, string? Mode = null);
+
+record LlmChoice(string? Provider, string? Model);
+
+record KeyBody(string? ApiKey);
 
 record ApprovalBody(bool Approve, string? By);
 

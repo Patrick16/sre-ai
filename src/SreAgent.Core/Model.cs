@@ -30,7 +30,14 @@ public sealed record AgentLimits
 }
 
 /// <summary>What the Ralph loop repeats until done: the same goal, every iteration, with a fresh LLM context.</summary>
-public sealed record TaskSpec(string Id, string Goal, TriggerEvent Trigger, string Namespace, AgentLimits Limits, string Language);
+public sealed record TaskSpec(string Id, string Goal, TriggerEvent Trigger, string Namespace, AgentLimits Limits, string Language)
+{
+    /// <summary>
+    /// The ceiling for THIS run, chosen by the human who started it; null = the global one (<see cref="ActionSettings.Mode"/>).
+    /// An action's own mode still applies: a run started as Auto cannot make an Approve-only action automatic.
+    /// </summary>
+    public ActionMode? Mode { get; init; }
+}
 
 /// <summary>The model's structured verdict for one iteration (parsed from its final JSON answer).</summary>
 public sealed record Analysis(

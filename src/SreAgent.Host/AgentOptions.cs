@@ -30,6 +30,9 @@ public sealed class AgentOptions
     /// <summary>RunState files older than this many days are deleted at startup (reports and audit stay). 0 = keep all.</summary>
     public int StateRetentionDays { get; set; } = 14;
 
+    /// <summary>Run list and iteration traces ({DataDir}/runs) older than this many days are deleted at startup. 0 = keep all.</summary>
+    public int HistoryRetentionDays { get; set; } = 30;
+
     /// <summary>
     /// Shared secret for the endpoints that change something (POST /runs, POST /approvals/{id}): sent as the header
     /// <c>X-Agent-Token</c>. Empty = not required (then only the NetworkPolicy protects them).
