@@ -26,7 +26,7 @@ builder.Services.AddSingleton<IRunStateStore>(sp => new FileRunStateStore(Path.C
 builder.Services.AddSingleton(sp =>
 {
     var o = sp.GetRequiredService<IOptions<AgentOptions>>().Value;
-    return new MarkdownReportWriter(Path.Combine(o.DataDir, "reports"), o.Language);
+    return new MarkdownReportWriter(Path.Combine(o.DataDir, "reports"));
 });
 
 // Actions: only when at least one type is allowlisted; otherwise ActionLead isn't registered and the agent observes.

@@ -79,5 +79,5 @@ public class ConsoleTests
     }
 
     private static TaskSpec TestTask(string id) =>
-        new(id, "goal", new TriggerEvent(TriggerKind.Manual, [], "test", DateTimeOffset.UtcNow), "sandbox", new AgentLimits(), "Russian");
+        new(id, "goal", new TriggerEvent(TriggerKind.Manual, [], "test", DateTimeOffset.UtcNow), "sandbox", new AgentLimits(), "English");
 }

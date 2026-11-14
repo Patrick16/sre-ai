@@ -21,7 +21,7 @@ public class OrderRulesTests
 
     [Theory]
     [InlineData("coffee")]
-    [InlineData("кофе с молоком")]
+    [InlineData("café with milk")]
     public void Normal_items_pass(string item) => Assert.Null(OrderRules.Validate(item));
 
     [Fact]

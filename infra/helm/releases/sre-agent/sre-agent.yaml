@@ -47,7 +47,7 @@ persistence:
 configEnv:
   Agent__Namespace: "sandbox"
   Agent__ScheduleMinutes: "0"         # e.g. "60" for an hourly health check (each run costs minutes of GPU)
-  Agent__Language: "Russian"
+  Agent__Language: "English"          # the model's summaries/recommendations; the game-day regexes in infra/chaos/scenarios.json expect English
   # An 8-minute outage + ~5 minutes for the 5m SLI window to cool down doesn't fit into 6 iterations of
   # ~1.5 min + 60 s backoff: the first end-to-end test ended LimitsExhausted one iteration short.
   Agent__Limits__MaxIterations: "10"
@@ -60,7 +60,7 @@ configEnv:
   Llm__AllowedModels__0: "qwen/qwen3.5-9b"
   Llm__AllowedModels__1: "qwythos-9b-claude-mythos-5-1m"
   Llm__AllowedModels__2: "gemma4-26b-a4b-uncensored-hauhaucs-balanced"
-  # More LLM providers for the console (Настройки -> Провайдеры и ключи). Off by default: a provider needs its BaseUrl
+  # More LLM providers for the console (Settings -> Providers and keys). Off by default: a provider needs its BaseUrl
   # here AND the egress rule in networkPolicy.allowToCidrs below - a request can never supply a URL itself.
   # The key is typed into the console (kept in the agent's memory until it restarts) or comes from a Secret:
   #   secretEnv: [{ name: Llm__Providers__openrouter__ApiKey, secretName: llm-keys, key: openrouter }]

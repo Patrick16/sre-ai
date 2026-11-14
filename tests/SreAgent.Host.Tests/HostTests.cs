@@ -225,7 +225,7 @@ public class ReportWriterTests
     [Theory]
     [InlineData("PostgresDown", "postgresdown")]
     [InlineData("Postgres Down!", "postgres-down")]
-    [InlineData("ПостгресУпал", "report")]                       // used to give an empty slug
+    [InlineData("éèà!!", "report")]                              // non-Latin-only titles used to give an empty slug
     [InlineData("", "report")]
     public void Slug_is_never_empty(string title, string expected) =>
         Assert.Equal(expected, MarkdownReportWriter.Slug(title));
@@ -253,12 +253,11 @@ public class ReportWriterTests
             var analysis = new Analysis("s", "h", "low", [], [], [], true, "");
             run.Iterations.Add(new IterationResult(1, DateTimeOffset.UtcNow, TimeSpan.Zero, "m", "log line with ``` inside", analysis, [], "lead", new CompletionStatus(true, "ok"), 0, 0));
 
-            var path = await new MarkdownReportWriter(dir, "English").WriteAsync(run, CancellationToken.None);
+            var path = await new MarkdownReportWriter(dir).WriteAsync(run, CancellationToken.None);
             var text = await File.ReadAllTextAsync(path);
 
             Assert.Contains("````text", text);                   // fence is one longer than the longest run inside
-            Assert.Contains("## Summary", text);                 // headings follow Agent:Language
-            Assert.DoesNotContain("## Кратко", text);
+            Assert.Contains("## Summary", text);                 // headings are always English
         }
         finally { Directory.Delete(dir, true); }
     }

@@ -139,7 +139,7 @@ public class RunHistoryTests : IDisposable
     [Fact]
     public void Iterations_are_read_back_from_disk_when_memory_has_forgotten_them()
     {
-        var task = new TaskSpec("20261111-101500-manual-abc123", "goal", new TriggerEvent(TriggerKind.Manual, [], "t", DateTimeOffset.UtcNow), "sandbox", new AgentLimits(), "Russian");
+        var task = new TaskSpec("20261111-101500-manual-abc123", "goal", new TriggerEvent(TriggerKind.Manual, [], "t", DateTimeOffset.UtcNow), "sandbox", new AgentLimits(), "English");
         var iteration = new IterationResult(1, DateTimeOffset.UtcNow, TimeSpan.FromSeconds(3), "m", "observed",
             new Analysis("summary", "hypothesis", "high", [], [], [], Parsed: true, RawText: "raw"), [], "lead", new CompletionStatus(true, "done"), 1, 2);
         new RunTraceStore(History()).IterationFinished(task, iteration);

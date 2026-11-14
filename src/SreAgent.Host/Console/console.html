@@ -1,9 +1,9 @@
 <!doctype html>
-<html lang="ru">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>SRE-агент: консоль</title>
+<title>SRE agent: console</title>
 <style>
   :root {
     --bg: #f5f6f8; --panel: #ffffff; --text: #1c2230; --muted: #667085; --line: #e2e5eb;
@@ -101,11 +101,11 @@
 </head>
 <body>
 <header>
-  <h1><span id="health" class="dot" title="готовность агента"></span> SRE-агент</h1>
-  <div id="status" class="row muted status" title="открыть настройки"></div>
+  <h1><span id="health" class="dot" title="agent readiness"></span> SRE agent</h1>
+  <div id="status" class="row muted status" title="open settings"></div>
   <div class="row">
-    <button id="openRun">Запустить агента</button>
-    <button id="openSettings" class="ghost">Настройки</button>
+    <button id="openRun">Start agent run</button>
+    <button id="openSettings" class="ghost">Settings</button>
   </div>
 </header>
 
@@ -113,31 +113,31 @@
   <section id="approvals" class="card hidden" aria-live="polite"></section>
   <div class="cols">
     <aside class="card">
-      <h2>Запуски</h2>
+      <h2>Runs</h2>
       <div id="filters" class="filters"></div>
-      <div id="runs"><p class="muted">Загрузка…</p></div>
+      <div id="runs"><p class="muted">Loading…</p></div>
     </aside>
-    <section id="detail" class="card"><p class="muted">Выберите запуск слева.</p></section>
+    <section id="detail" class="card"><p class="muted">Select a run on the left.</p></section>
   </div>
 </main>
 
-<dialog id="dlgTrace"><div class="dlghead"><h2 id="traceTitle">Ход работы</h2><button class="ghost" data-close>Закрыть</button></div><div id="traceBody" class="dlgbody"></div></dialog>
-<dialog id="dlgRun" class="narrow"><div class="dlghead"><h2>Запустить агента</h2><button class="ghost" data-close>Закрыть</button></div><div id="runBody" class="dlgbody"></div></dialog>
-<dialog id="dlgSettings" class="narrow"><div class="dlghead"><h2>Настройки</h2><button class="ghost" data-close>Закрыть</button></div><div id="settingsBody" class="dlgbody"></div></dialog>
+<dialog id="dlgTrace"><div class="dlghead"><h2 id="traceTitle">Work log</h2><button class="ghost" data-close>Close</button></div><div id="traceBody" class="dlgbody"></div></dialog>
+<dialog id="dlgRun" class="narrow"><div class="dlghead"><h2>Start agent run</h2><button class="ghost" data-close>Close</button></div><div id="runBody" class="dlgbody"></div></dialog>
+<dialog id="dlgSettings" class="narrow"><div class="dlghead"><h2>Settings</h2><button class="ghost" data-close>Close</button></div><div id="settingsBody" class="dlgbody"></div></dialog>
 <div id="toast" class="toast hidden" role="status"></div>
 
 <script>
 (() => {
   const $ = (s, root = document) => root.querySelector(s);
   const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-  const fmtTime = (t) => (t ? new Date(t).toLocaleTimeString('ru-RU') : '—');
-  const fmtDate = (t) => (t ? new Date(t).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '—');
-  const fmtDur = (a, b) => { if (!a || !b) return '—'; const s = Math.round((new Date(b) - new Date(a)) / 1000); return s < 60 ? `${s} с` : `${Math.floor(s / 60)} мин ${s % 60} с`; };
-  const TRIGGER = { Alert: 'алерт', Schedule: 'расписание', Manual: 'вручную', Incident: 'инцидент' };
-  const OUTCOME = { Resolved: 'решено', LimitsExhausted: 'лимит итераций', Escalated: 'эскалация', Failed: 'ошибка', Cancelled: 'отменён' };
+  const fmtTime = (t) => (t ? new Date(t).toLocaleTimeString('en-GB') : '—');
+  const fmtDate = (t) => (t ? new Date(t).toLocaleString('en-GB', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '—');
+  const fmtDur = (a, b) => { if (!a || !b) return '—'; const s = Math.round((new Date(b) - new Date(a)) / 1000); return s < 60 ? `${s} s` : `${Math.floor(s / 60)} min ${s % 60} s`; };
+  const TRIGGER = { Alert: 'alert', Schedule: 'schedule', Manual: 'manual', Incident: 'incident' };
+  const OUTCOME = { Resolved: 'resolved', LimitsExhausted: 'iteration limit', Escalated: 'escalated', Failed: 'failed', Cancelled: 'cancelled' };
   const MODES = ['DryRun', 'Approve', 'Auto'];
-  const MODE_TEXT = { DryRun: 'только описывать действия', Approve: 'действия с вашим одобрением', Auto: 'действия автоматически' };
-  const AUTO_WARNING = 'Режим Auto: агент сможет выполнять разрешённые действия (перезапуск Deployment в sandbox) без вашего одобрения. Продолжить?';
+  const MODE_TEXT = { DryRun: 'describe actions only', Approve: 'actions with your approval', Auto: 'actions automatically' };
+  const AUTO_WARNING = 'Auto mode: the agent will be able to run allowed actions (restarting a Deployment in sandbox) without your approval. Continue?';
 
   // What the page knows. Everything shown is drawn from here; the 3-second tick only refreshes it.
   const state = { selected: null, filter: 'all', runs: [], actions: null, llm: null, trace: null, traceKey: '', reports: {} };
@@ -169,12 +169,12 @@
       try { data = text ? JSON.parse(text) : null; } catch { data = text; }
       return { ok: res.ok, status: res.status, data };
     } catch (e) {
-      return { ok: false, status: 0, data: { error: 'агент недоступен: ' + e.message } };
+      return { ok: false, status: 0, data: { error: 'agent unavailable: ' + e.message } };
     }
   }
-  const errorOf = (r) => r.data?.error ?? (r.status === 401 ? 'нужен токен агента (Настройки)' : `ошибка ${r.status}`);
+  const errorOf = (r) => r.data?.error ?? (r.status === 401 ? 'agent token required (Settings)' : `error ${r.status}`);
 
-  const statusText = (r) => (r.status === 'finished' ? (OUTCOME[r.outcome] ?? r.outcome ?? 'завершён') : r.status === 'running' ? 'идёт' : 'в очереди');
+  const statusText = (r) => (r.status === 'finished' ? (OUTCOME[r.outcome] ?? r.outcome ?? 'finished') : r.status === 'running' ? 'running' : 'queued');
   const statusClass = (r) => (r.status !== 'finished' ? 'chip run'
     : r.outcome === 'Resolved' ? 'chip ok' : (r.outcome === 'Escalated' || r.outcome === 'Failed') ? 'chip bad' : 'chip warn');
   const trigger = (r) => `<span class="trg ${esc(r.trigger)}">${esc(TRIGGER[r.trigger] ?? r.trigger)}</span>`;
@@ -190,8 +190,8 @@
   // ---------- header ----------
   function renderStatus() {
     const a = state.actions, l = state.llm;
-    const mode = a?.mode ? `Режим по умолчанию: <b>${esc(a.mode)}</b>` : 'Действия выключены';
-    const llm = l ? `Модель: <b>${esc(l.default.provider)} / ${esc(l.default.model)}</b>` : '';
+    const mode = a?.mode ? `Default mode: <b>${esc(a.mode)}</b>` : 'Actions disabled';
+    const llm = l ? `Model: <b>${esc(l.default.provider)} / ${esc(l.default.model)}</b>` : '';
     $('#status').innerHTML = `<span>${mode}</span><span>${llm}</span>`;
   }
 
@@ -199,23 +199,23 @@
   function renderApprovals(list) {
     const box = $('#approvals');
     box.classList.toggle('hidden', list.length === 0);
-    box.innerHTML = list.length ? `<h2>Ждут вашего решения (${list.length})</h2>` + list.map((a) => `
+    box.innerHTML = list.length ? `<h2>Waiting for your decision (${list.length})</h2>` + list.map((a) => `
       <div class="appr">
-        <div><b>${esc(a.proposal.type)}</b> → <code>${esc(a.proposal.target)}</code> · запуск <code>${esc(a.runId)}</code>, итерация ${a.iteration} · до ${fmtTime(a.expiresAt)}</div>
+        <div><b>${esc(a.proposal.type)}</b> → <code>${esc(a.proposal.target)}</code> · run <code>${esc(a.runId)}</code>, iteration ${a.iteration} · until ${fmtTime(a.expiresAt)}</div>
         <div class="muted">${esc(a.proposal.reason)}</div>
         <div class="row" style="margin-top:6px">
-          <button data-approve="${esc(a.id)}" data-v="true">Одобрить</button>
-          <button class="danger" data-approve="${esc(a.id)}" data-v="false">Отклонить</button>
+          <button data-approve="${esc(a.id)}" data-v="true">Approve</button>
+          <button class="danger" data-approve="${esc(a.id)}" data-v="false">Reject</button>
         </div>
       </div>`).join('') : '';
   }
   $('#approvals').addEventListener('click', async (e) => {
     const b = e.target.closest('[data-approve]');
     if (!b) return;
-    if (!who()) { toast('Укажите имя в Настройках: оно попадёт в аудит', true); openSettings(); return; }
+    if (!who()) { toast('Enter your name in Settings: it goes to the audit log', true); openSettings(); return; }
     const approve = b.dataset.v === 'true';
     const r = await api('POST', `/approvals/${encodeURIComponent(b.dataset.approve)}`, { approve, by: who() });
-    toast(r.ok ? (approve ? 'Одобрено' : 'Отклонено') : errorOf(r), !r.ok);
+    toast(r.ok ? (approve ? 'Approved' : 'Rejected') : errorOf(r), !r.ok);
     tick(true);
   });
 
@@ -223,7 +223,7 @@
   function renderFilters() {
     const counts = { all: state.runs.length };
     for (const r of state.runs) counts[r.trigger] = (counts[r.trigger] ?? 0) + 1;
-    const items = [['all', 'все'], ['Alert', 'алерт'], ['Incident', 'инцидент'], ['Schedule', 'расписание'], ['Manual', 'вручную']];
+    const items = [['all', 'all'], ['Alert', 'alert'], ['Incident', 'incident'], ['Schedule', 'schedule'], ['Manual', 'manual']];
     $('#filters').innerHTML = items.map(([k, t]) => `<button data-filter="${k}" aria-pressed="${state.filter === k}">${t} ${counts[k] ?? 0}</button>`).join('');
   }
   function renderRuns() {
@@ -233,8 +233,8 @@
       <button class="runitem ${run.id === state.selected ? 'sel' : ''}" data-run="${esc(run.id)}">
         <span class="row">${trigger(run)}<span class="${statusClass(run)}">${esc(statusText(run))}</span><span class="muted">${fmtDate(run.queuedAt)}</span></span>
         <span class="runhyp">${esc(run.hypothesis || run.triggerDetail || '…')}</span>
-        <span class="muted">${esc(modelText(run))} · итераций ${run.iterations}${run.mode ? ' · ' + esc(run.mode) : ''}</span>
-      </button>`).join('') : '<p class="muted">Запусков нет.</p>';
+        <span class="muted">${esc(modelText(run))} · iterations ${run.iterations}${run.mode ? ' · ' + esc(run.mode) : ''}</span>
+      </button>`).join('') : '<p class="muted">No runs.</p>';
   }
   $('#filters').addEventListener('click', (e) => { const b = e.target.closest('[data-filter]'); if (b) { state.filter = b.dataset.filter; renderRuns(); } });
   $('#runs').addEventListener('click', (e) => {
@@ -300,7 +300,7 @@
     if (!force && state.trace && state.traceKey === key && listed?.status === 'finished') return;
     const r = await api('GET', `/runs/${encodeURIComponent(id)}/trace`);
     if (id !== state.selected) return;
-    if (!r.ok) { $('#detail').innerHTML = `<p class="bad">${esc(r.data?.error ?? `запуск не найден (${r.status})`)}</p>`; return; }
+    if (!r.ok) { $('#detail').innerHTML = `<p class="bad">${esc(r.data?.error ?? `run not found (${r.status})`)}</p>`; return; }
     state.trace = r.data; state.traceKey = key;
     if (r.data.run.status === 'finished' && r.data.run.reportPath && state.reports[id] === undefined) {
       try {
@@ -318,33 +318,33 @@
     const running = run.status !== 'finished';
     const last = iterations[iterations.length - 1];
     const interim = running
-      ? `<div class="interim"><b>Агент работает.</b> ${last
-          ? `Промежуточный результат после итерации ${last.number}: ${esc(last.hypothesis)}<div class="muted">${esc(last.summary)}</div><div class="muted">Проверка завершения: ${esc(last.completionReason)}</div>`
-          : 'Идёт первая итерация: результат появится, когда она закончится.'}</div>`
+      ? `<div class="interim"><b>The agent is working.</b> ${last
+          ? `Intermediate result after iteration ${last.number}: ${esc(last.hypothesis)}<div class="muted">${esc(last.summary)}</div><div class="muted">Completion check: ${esc(last.completionReason)}</div>`
+          : 'The first iteration is in progress: the result appears when it finishes.'}</div>`
       : '';
     const report = state.reports[run.id];
     const reportHtml = running ? ''
       : report ? `<div class="report">${markdown(report)}</div>`
-      : `<p class="muted">${run.reportPath ? 'Отчёт не удалось загрузить.' : 'У этого запуска нет отчёта.'}</p>`;
+      : `<p class="muted">${run.reportPath ? 'The report could not be loaded.' : 'This run has no report.'}</p>`;
     $('#detail').innerHTML = `
       <div class="dhead">
         <div>
           <h2>${trigger(run)} ${esc(run.triggerDetail || '')}</h2>
           <div class="meta">
-            <span class="chip">начат ${fmtDate(run.queuedAt)}</span>
-            <span class="chip">длительность ${running ? '…' : fmtDur(run.queuedAt, run.finishedAt)}</span>
-            <span class="chip">модель ${esc(modelText(run))}</span>
-            <span class="chip">режим ${esc(run.mode ?? 'по умолчанию')}</span>
-            <span class="chip">итераций ${running ? iterations.length : run.iterations}</span>
+            <span class="chip">started ${fmtDate(run.queuedAt)}</span>
+            <span class="chip">duration ${running ? '…' : fmtDur(run.queuedAt, run.finishedAt)}</span>
+            <span class="chip">model ${esc(modelText(run))}</span>
+            <span class="chip">mode ${esc(run.mode ?? 'default')}</span>
+            <span class="chip">iterations ${running ? iterations.length : run.iterations}</span>
           </div>
         </div>
         <div class="row">
-          <button id="openTrace" class="ghost">Подробно: ход работы (${iterations.length})</button>
+          <button id="openTrace" class="ghost">Details: work log (${iterations.length})</button>
           ${run.reportPath ? `<a class="ghost" href="/runs/${encodeURIComponent(run.id)}/report" target="_blank" rel="noopener">Markdown</a>` : ''}
         </div>
       </div>
       <div class="verdict"><span class="${statusClass(run)}">${esc(statusText(run))}</span> ${run.outcomeReason ? esc(run.outcomeReason) : ''}</div>
-      <details class="sub" data-key="goal:${esc(run.id)}"${openKeys.has('goal:' + run.id) ? ' open' : ''}><summary>Задача агента</summary><p class="muted">${esc(run.goal ?? '—')}</p><p class="muted">id: <code>${esc(run.id)}</code></p></details>
+      <details class="sub" data-key="goal:${esc(run.id)}"${openKeys.has('goal:' + run.id) ? ' open' : ''}><summary>Agent task</summary><p class="muted">${esc(run.goal ?? '—')}</p><p class="muted">id: <code>${esc(run.id)}</code></p></details>
       ${interim}${reportHtml}`;
   }
   $('#detail').addEventListener('click', (e) => { if (e.target.closest('#openTrace')) { renderTrace(); $('#dlgTrace').showModal(); } });
@@ -357,36 +357,36 @@
   function actionBlock(a) {
     const snap = (s) => (s ? `<div class="muted">${esc(s)}</div>` : '');
     return `<div class="action">
-      <div><b>Действие:</b> ${esc(a.type)} → <code>${esc(a.target)}</code> · режим ${esc(a.mode)} · статус <b>${esc(a.status)}</b>
-        ${a.effect !== 'NotMeasured' ? ` · эффект ${esc(a.effect)}` : ''}${a.approvedBy ? ` · одобрил ${esc(a.approvedBy)}` : ''}</div>
-      <div class="muted">Обоснование модели: ${esc(a.reason)}</div>
+      <div><b>Action:</b> ${esc(a.type)} → <code>${esc(a.target)}</code> · mode ${esc(a.mode)} · status <b>${esc(a.status)}</b>
+        ${a.effect !== 'NotMeasured' ? ` · effect ${esc(a.effect)}` : ''}${a.approvedBy ? ` · approved by ${esc(a.approvedBy)}` : ''}</div>
+      <div class="muted">Model's reason: ${esc(a.reason)}</div>
       <div>${esc(a.detail)}</div>
-      ${snap(a.before ? 'до: ' + a.before : '')}${snap(a.after ? 'после: ' + a.after : '')}
+      ${snap(a.before ? 'before: ' + a.before : '')}${snap(a.after ? 'after: ' + a.after : '')}
       <ul class="checks">${(a.checks ?? []).map((c) => `<li class="${c.passed ? 'ok' : 'bad'}">${c.passed ? '✓' : '✗'} ${esc(c.name)}: ${esc(c.detail)}</li>`).join('')}</ul>
     </div>`;
   }
 
   function iterationCard(runId, i) {
     const key = `${runId}:${i.number}`;
-    const tools = (i.toolCalls ?? []).map((c) => `<li><code>${esc(c.tool)}</code>(${esc(c.arguments)})${c.failed ? ' <span class="bad">ошибка</span>' : ''}
+    const tools = (i.toolCalls ?? []).map((c) => `<li><code>${esc(c.tool)}</code>(${esc(c.arguments)})${c.failed ? ' <span class="bad">error</span>' : ''}
       <pre>${esc(c.resultPreview)}</pre></li>`).join('');
     return `<div class="it">
       <div class="ithead">
-        <span class="num">Итерация ${i.number}</span>
-        <span class="chip">${esc(fmtTime(i.startedAt))} · ${Number(i.durationSeconds).toFixed(0)} с</span>
-        <span class="chip">уверенность: ${esc(i.confidence)}</span>
+        <span class="num">Iteration ${i.number}</span>
+        <span class="chip">${esc(fmtTime(i.startedAt))} · ${Number(i.durationSeconds).toFixed(0)} s</span>
+        <span class="chip">confidence: ${esc(i.confidence)}</span>
         ${i.action ? `<span class="chip ${i.action.status === 'Executed' ? 'ok' : 'warn'}">${esc(i.action.type)}: ${esc(i.action.status)}</span>` : ''}
-        <span class="chip ${i.done ? 'ok' : ''}">${i.done ? 'задача решена' : 'не решена'}</span>
+        <span class="chip ${i.done ? 'ok' : ''}">${i.done ? 'task solved' : 'not solved'}</span>
       </div>
       <p><b>${esc(i.hypothesis)}</b></p>
       <p>${esc(i.summary)}</p>
       ${i.action ? actionBlock(i.action) : ''}
-      <p class="muted">Проверка завершения (код, не модель): ${esc(i.completionReason)}</p>
-      ${sub(`${key}:result`, 'Свидетельства, факты, рекомендации', `${list('Свидетельства', i.evidence)}${list('Факты, подтверждённые в этой итерации', i.facts)}${list('Рекомендации', i.recommendations)}${list('Что проверить дальше', i.nextChecks)}
-        <p class="muted">Lead: ${esc(i.lead)} · токены ${i.inputTokens}/${i.outputTokens} · модель ${esc(i.model)}</p>`)}
-      ${tools ? sub(`${key}:tools`, `Вызовы инструментов (${i.toolCalls.length})`, `<ul class="plain">${tools}</ul>`) : ''}
-      ${sub(`${key}:thinking`, 'Ход рассуждения (сырой ответ модели)', `<pre>${esc(i.thinking)}</pre>`)}
-      ${sub(`${key}:observed`, 'Что увидел код до вызова модели (R)', `<pre>${esc(i.observations)}</pre>`)}
+      <p class="muted">Completion check (code, not the model): ${esc(i.completionReason)}</p>
+      ${sub(`${key}:result`, 'Evidence, facts, recommendations', `${list('Evidence', i.evidence)}${list('Facts confirmed in this iteration', i.facts)}${list('Recommendations', i.recommendations)}${list('What to check next', i.nextChecks)}
+        <p class="muted">Lead: ${esc(i.lead)} · tokens ${i.inputTokens}/${i.outputTokens} · model ${esc(i.model)}</p>`)}
+      ${tools ? sub(`${key}:tools`, `Tool calls (${i.toolCalls.length})`, `<ul class="plain">${tools}</ul>`) : ''}
+      ${sub(`${key}:thinking`, 'Reasoning (raw model output)', `<pre>${esc(i.thinking)}</pre>`)}
+      ${sub(`${key}:observed`, 'What the code saw before calling the model (R)', `<pre>${esc(i.observations)}</pre>`)}
     </div>`;
   }
 
@@ -394,33 +394,33 @@
     if (!state.trace) return;
     const { run, iterations } = state.trace;
     const running = run.status !== 'finished';
-    $('#traceTitle').innerHTML = `Ход работы · ${trigger(run)} ${fmtDate(run.queuedAt)}`;
+    $('#traceTitle').innerHTML = `Work log · ${trigger(run)} ${fmtDate(run.queuedAt)}`;
     $('#traceBody').innerHTML = (iterations.length ? iterations.map((i) => iterationCard(run.id, i)).join('')
-      : `<p class="muted">${running ? 'Первая итерация ещё идёт.' : 'Итерации этого запуска не сохранились (он был до включения истории). Смотрите отчёт.'}</p>`)
-      + (running ? `<p class="run">Идёт итерация ${iterations.length + 1}…</p>` : '');
+      : `<p class="muted">${running ? 'The first iteration is still running.' : 'The iterations of this run were not saved (it ran before history was enabled). See the report.'}</p>`)
+      + (running ? `<p class="run">Iteration ${iterations.length + 1} in progress…</p>` : '');
   }
 
   // ---------- model picker (shared by the run dialog and the settings) ----------
   const providerOptions = (selected) => (state.llm?.providers ?? []).map((p) =>
-    `<option value="${esc(p.name)}"${p.name === selected ? ' selected' : ''}>${esc(p.name)}${p.requiresKey && !p.keySet ? ' (нет ключа)' : ''}</option>`).join('');
+    `<option value="${esc(p.name)}"${p.name === selected ? ' selected' : ''}>${esc(p.name)}${p.requiresKey && !p.keySet ? ' (no key)' : ''}</option>`).join('');
   function fillModels(root, provider, value) {
     const p = (state.llm?.providers ?? []).find((x) => x.name === provider);
     $('[data-models]', root).innerHTML = (p?.models ?? []).map((m) => `<option value="${esc(m)}"></option>`).join('');
     const input = $('[data-model]', root);
     input.value = value ?? (p && provider === state.llm.default.provider ? state.llm.default.model : (p?.models[0] ?? ''));
-    input.placeholder = p?.anyModel ? 'id модели провайдера' : 'модель из списка';
+    input.placeholder = p?.anyModel ? 'model id of the provider' : 'model from the list';
   }
   async function refreshModels(root) {
     const provider = $('[data-provider]', root).value;
     const r = await api('GET', `/llm/providers/${encodeURIComponent(provider)}/models`);
     if (r.ok && r.data.models?.length) $('[data-models]', root).innerHTML = r.data.models.map((m) => `<option value="${esc(m)}"></option>`).join('');
-    toast(r.ok && !r.data.error ? `Моделей у провайдера: ${r.data.models.length}` : (r.data?.error ?? errorOf(r)), !(r.ok && !r.data.error));
+    toast(r.ok && !r.data.error ? `Models from provider: ${r.data.models.length}` : (r.data?.error ?? errorOf(r)), !(r.ok && !r.data.error));
   }
   const modelPicker = (id) => `
     <div class="row">
-      <label class="grow">Провайдер<select data-provider>${providerOptions(state.llm?.default.provider)}</select></label>
-      <label class="grow">Модель<input data-model list="${id}" autocomplete="off"><datalist id="${id}" data-models></datalist></label>
-      <button type="button" class="ghost" data-refresh title="спросить список моделей у провайдера" style="align-self:end">Список</button>
+      <label class="grow">Provider<select data-provider>${providerOptions(state.llm?.default.provider)}</select></label>
+      <label class="grow">Model<input data-model list="${id}" autocomplete="off"><datalist id="${id}" data-models></datalist></label>
+      <button type="button" class="ghost" data-refresh title="ask the provider for its model list" style="align-self:end">List</button>
     </div>`;
   function wirePicker(root) {
     fillModels(root, $('[data-provider]', root).value);
@@ -432,23 +432,23 @@
   function openRun() {
     const globalMode = state.actions?.mode;
     $('#runBody').innerHTML = `
-      <label>Что запустить
+      <label>What to run
         <select id="runKind">
-          <option value="check">Проверка состояния (одна итерация)</option>
-          <option value="incident">Инцидент (работает, пока система не вернётся в норму)</option>
+          <option value="check">Health check (one iteration)</option>
+          <option value="incident">Incident (keeps working until the system is back to normal)</option>
         </select>
       </label>
-      <label>Комментарий: что случилось или зачем запуск (попадёт в отчёт)<input id="runNote" maxlength="300" placeholder="например: пользователи жалуются на ошибки"></label>
-      <fieldset><legend>Модель</legend>${modelPicker('runModels')}</fieldset>
-      <fieldset><legend>Режим действий в этом запуске</legend>
+      <label>Comment: what happened or why this run (goes into the report)<input id="runNote" maxlength="300" placeholder="for example: users report errors"></label>
+      <fieldset><legend>Model</legend>${modelPicker('runModels')}</fieldset>
+      <fieldset><legend>Action mode for this run</legend>
         ${globalMode ? `<div class="row" id="runModes">
-            <button type="button" class="ghost" data-runmode="" aria-pressed="true">По умолчанию (${esc(globalMode)})</button>
+            <button type="button" class="ghost" data-runmode="" aria-pressed="true">Default (${esc(globalMode)})</button>
             ${MODES.map((m) => `<button type="button" class="ghost" data-runmode="${m}" aria-pressed="false" title="${esc(MODE_TEXT[m])}">${m}</button>`).join('')}
           </div>
-          <div class="muted" id="runModeHint">Как у запусков по алерту и расписанию.</div>`
-        : '<div class="muted">Действия не настроены: агент только наблюдает.</div>'}
+          <div class="muted" id="runModeHint">Same as for alert and schedule runs.</div>`
+        : '<div class="muted">No actions configured: the agent only observes.</div>'}
       </fieldset>
-      <div class="row" style="justify-content:flex-end"><button id="runStart">Запустить</button></div>`;
+      <div class="row" style="justify-content:flex-end"><button id="runStart">Start</button></div>`;
     const body = $('#runBody');
     wirePicker(body);
     let mode = '';
@@ -457,7 +457,7 @@
       if (!b) return;
       mode = b.dataset.runmode;
       for (const x of body.querySelectorAll('[data-runmode]')) x.setAttribute('aria-pressed', String(x === b));
-      $('#runModeHint').textContent = mode ? `${MODE_TEXT[mode]}. Свой режим каждого действия всё равно действует (delete_pod остаётся с одобрением).` : 'Как у запусков по алерту и расписанию.';
+      $('#runModeHint').textContent = mode ? `${MODE_TEXT[mode]}. Each action's own mode still applies (delete_pod still needs approval).` : 'Same as for alert and schedule runs.';
     });
     $('#runStart').addEventListener('click', async () => {
       if (mode === 'Auto' && !confirm(AUTO_WARNING)) return;
@@ -469,7 +469,7 @@
       if (!r.ok) { toast(errorOf(r), true); return; }
       $('#dlgRun').close();
       state.selected = r.data.runId; state.trace = null; state.filter = 'all';
-      toast('Запуск начат');
+      toast('Run started');
       tick(true);
     });
     $('#dlgRun').showModal();
@@ -480,34 +480,34 @@
   function renderSettings() {
     const a = state.actions, l = state.llm;
     const allowed = Object.entries(a?.allowed ?? {}).map(([type, eff]) => `<span class="chip">${esc(type)}: <b>${esc(eff)}</b></span>`).join('');
-    const keyText = (p) => (p.keySource === 'runtime' ? 'ключ задан здесь (в памяти агента, до перезапуска)' : p.keySource === 'config' ? 'ключ из Secret' : p.requiresKey ? 'ключ не задан' : 'ключ не нужен');
+    const keyText = (p) => (p.keySource === 'runtime' ? 'key set here (in agent memory, until restart)' : p.keySource === 'config' ? 'key from Secret' : p.requiresKey ? 'key not set' : 'no key needed');
     $('#settingsBody').innerHTML = `
-      <fieldset><legend>Вы</legend>
-        <label>Имя (попадает в аудит одобрений и смены режима)<input id="setBy" value="${esc(who())}"></label>
-        <label>Токен агента (если включён Agent__ApiToken; хранится только в этой вкладке)<input id="setToken" type="password" value="${esc(token())}" autocomplete="off"></label>
+      <fieldset><legend>You</legend>
+        <label>Name (goes into the audit of approvals and mode changes)<input id="setBy" value="${esc(who())}"></label>
+        <label>Agent token (if Agent__ApiToken is enabled; stored only in this tab)<input id="setToken" type="password" value="${esc(token())}" autocomplete="off"></label>
       </fieldset>
-      <fieldset><legend>Режим действий по умолчанию (алерты, расписание)</legend>
+      <fieldset><legend>Default action mode (alerts, schedule)</legend>
         ${a?.mode ? `<div class="row" id="setModes">${MODES.map((m) => `<button type="button" data-mode="${m}" aria-pressed="${a.mode === m}" class="${a.mode === m ? '' : 'ghost'}" title="${esc(MODE_TEXT[m])}">${m}</button>`).join('')}</div>
           <div class="row">${allowed}</div>
-          <div class="muted">Эффективный режим действия — более строгий из этого потолка и собственного режима действия. После перезапуска агента возвращается значение из values.</div>`
-        : `<div class="muted">${esc(a?.reason ?? 'Действия не настроены: агент только наблюдает.')}</div>`}
+          <div class="muted">The effective action mode is the stricter of this ceiling and the action's own mode. After an agent restart the value from values comes back.</div>`
+        : `<div class="muted">${esc(a?.reason ?? 'Actions are not configured: the agent only observes.')}</div>`}
       </fieldset>
-      <fieldset id="setDefault"><legend>Модель по умолчанию (алерты, расписание)</legend>
+      <fieldset id="setDefault"><legend>Default model (alerts, schedule)</legend>
         ${modelPicker('setModels')}
-        <div class="row" style="justify-content:flex-end"><button type="button" id="saveDefault">Сделать моделью по умолчанию</button></div>
+        <div class="row" style="justify-content:flex-end"><button type="button" id="saveDefault">Make default model</button></div>
       </fieldset>
-      <fieldset><legend>Провайдеры и ключи</legend>
+      <fieldset><legend>Providers and keys</legend>
         ${(l?.providers ?? []).map((p) => `
           <div class="prov">
             <div><b>${esc(p.name)}</b> <span class="muted">${esc(p.baseUrl)}</span></div>
-            <div class="muted">${esc(keyText(p))}${p.anyModel ? ' · любая модель провайдера' : ' · модели: ' + esc(p.models.join(', '))}</div>
+            <div class="muted">${esc(keyText(p))}${p.anyModel ? ' · any model of the provider' : ' · models: ' + esc(p.models.join(', '))}</div>
             <div class="row">
-              <input class="grow" type="password" data-key="${esc(p.name)}" placeholder="API-ключ" autocomplete="off">
-              <button type="button" data-savekey="${esc(p.name)}">Сохранить ключ</button>
-              ${p.keySource === 'runtime' ? `<button type="button" class="danger" data-dropkey="${esc(p.name)}">Забыть</button>` : ''}
+              <input class="grow" type="password" data-key="${esc(p.name)}" placeholder="API key" autocomplete="off">
+              <button type="button" data-savekey="${esc(p.name)}">Save key</button>
+              ${p.keySource === 'runtime' ? `<button type="button" class="danger" data-dropkey="${esc(p.name)}">Forget</button>` : ''}
             </div>
           </div>`).join('')}
-        <div class="muted">Ключ уходит в агент и хранится только в его памяти: на диск не пишется, в API не возвращается. Новые провайдеры (адрес, список моделей) добавляются в values агента — <code>Llm__Providers__имя__BaseUrl</code> — вместе с разрешением исходящего трафика в NetworkPolicy; см. docs/17.</div>
+        <div class="muted">The key goes to the agent and is kept only in its memory: it is not written to disk and not returned by the API. New providers (address, model list) are added in the agent's values as <code>Llm__Providers__&lt;name&gt;__BaseUrl</code>, together with an outgoing-traffic rule in NetworkPolicy; see docs/17.</div>
       </fieldset>`;
     wirePicker($('#setDefault'));
   }
@@ -526,13 +526,13 @@
       const mode = modeBtn.dataset.mode;
       if (mode === 'Auto' && !confirm(AUTO_WARNING)) return;
       const r = await api('PUT', '/actions/mode', { mode, by: who() || 'console' });
-      toast(r.ok ? `Режим по умолчанию: ${r.data.previous} → ${r.data.mode}` : errorOf(r), !r.ok);
+      toast(r.ok ? `Default mode: ${r.data.previous} → ${r.data.mode}` : errorOf(r), !r.ok);
       return refreshSettings();
     }
     if (e.target.closest('#saveDefault')) {
       const root = $('#setDefault');
       const r = await api('PUT', '/llm/default', { provider: $('[data-provider]', root).value, model: $('[data-model]', root).value.trim() || null });
-      toast(r.ok ? `Модель по умолчанию: ${r.data.provider} / ${r.data.model}` : errorOf(r), !r.ok);
+      toast(r.ok ? `Default model: ${r.data.provider} / ${r.data.model}` : errorOf(r), !r.ok);
       return refreshSettings();
     }
     const saveKey = e.target.closest('[data-savekey]');
@@ -540,9 +540,9 @@
     if (saveKey || dropKey) {
       const name = (saveKey ?? dropKey).dataset.savekey ?? dropKey.dataset.dropkey;
       const value = saveKey ? $(`[data-key="${CSS.escape(name)}"]`, body).value.trim() : '';
-      if (saveKey && !value) { toast('Введите ключ', true); return; }
+      if (saveKey && !value) { toast('Enter a key', true); return; }
       const r = await api('PUT', `/llm/providers/${encodeURIComponent(name)}/key`, { apiKey: value });
-      toast(r.ok ? (saveKey ? `Ключ для ${name} сохранён в памяти агента` : `Ключ для ${name} забыт`) : errorOf(r), !r.ok);
+      toast(r.ok ? (saveKey ? `Key for ${name} saved in agent memory` : `Key for ${name} forgotten`) : errorOf(r), !r.ok);
       return refreshSettings();
     }
   });
@@ -560,7 +560,7 @@
     try {
       const [health, approvals, runs] = await Promise.all([api('GET', '/health/ready'), api('GET', '/approvals'), api('GET', '/runs'), loadShared()]);
       $('#health').className = 'dot ' + (health.ok ? 'ok' : 'bad');
-      $('#health').title = health.ok ? 'агент готов' : 'агент не отвечает';
+      $('#health').title = health.ok ? 'agent ready' : 'agent not responding';
       renderStatus();
       renderApprovals(Array.isArray(approvals.data) ? approvals.data : []);
       if (runs.ok && Array.isArray(runs.data)) {

@@ -16,7 +16,7 @@ public sealed class AgentOptions
     public int ScheduleMinutes { get; set; }
 
     /// <summary>Language of the model's summary/hypothesis/recommendations in reports.</summary>
-    public string Language { get; set; } = "Russian";
+    public string Language { get; set; } = "English";
 
     /// <summary>Alert severities that start a run.</summary>
     public List<string> Severities { get; set; } = ["critical", "warning"];

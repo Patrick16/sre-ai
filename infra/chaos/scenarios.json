@@ -16,7 +16,7 @@
       "faultMinutes": 8,
       "agent": true,
       "note": "users report errors on the site",
-      "expect": { "rootCause": ["orders-api", "500|ошиб|error|исключ|exception|InvalidOperation"], "notRootCause": "postgres.*(down|недоступ|0 replica)" }
+      "expect": { "rootCause": ["orders-api", "500|error|exception|InvalidOperation"], "notRootCause": "postgres.*(down|unavailable|0 replica)" }
     },
     {
       "name": "network-delay-postgres",
@@ -25,7 +25,7 @@
       "faultMinutes": 8,
       "agent": true,
       "note": "users report that the site is slow",
-      "expect": { "rootCause": ["postgres|баз|БД|database", "задерж|latenc|медлен|slow|delay|сет|network"], "noAction": true }
+      "expect": { "rootCause": ["postgres|database|db", "latenc|slow|delay|network"], "noAction": true }
     },
     {
       "name": "memory-leak-orders-api",
@@ -34,7 +34,7 @@
       "faultMinutes": 8,
       "agent": true,
       "note": "orders-api pods keep restarting",
-      "expect": { "rootCause": ["OOM|памят|memory"] }
+      "expect": { "rootCause": ["OOM|memory"] }
     },
     {
       "name": "cpu-stress-orders-api",
@@ -43,7 +43,7 @@
       "faultMinutes": 8,
       "agent": true,
       "note": "users report that the site is slow",
-      "expect": { "rootCause": ["CPU|процессор|throttl|троттл|нагруз|не обнаруж|no .*(issue|problem)|в норме|healthy|steady"], "noAction": true }
+      "expect": { "rootCause": ["CPU|throttl|load|no .*(issue|problem)|healthy|steady"], "noAction": true }
     }
   ]
 }

@@ -1,4 +1,4 @@
 # reports/
 
-Сюда агент пишет отчёты (`YYYY-MM-DD/*.md`) и audit log (`audit/*.jsonl`) при локальном запуске.
-Содержимое игнорируется git'ом; формат описан в [docs/08-reporting-and-audit.md](../docs/08-reporting-and-audit.md).
+When the agent runs locally it writes its reports here (`YYYY-MM-DD/*.md`) and the audit log (`audit/*.jsonl`).
+The contents are ignored by git; the format is described in [docs/08-reporting-and-audit.md](../docs/08-reporting-and-audit.md).
