@@ -34,3 +34,6 @@ Thumbs.db
 
 # Local-only course documentation (Russian; not published, see CLAUDE.md)
 docs/
+
+# Local-only assistant instructions (not published)
+CLAUDE.md
