@@ -8,14 +8,14 @@ and to design and implement an agent harness of our own. The agent works as a **
 going until the task is solved. Each iteration is a **RALF** cycle:
 Retrieve → Analyze → Lead → Feedback, see [docs/05-agent-architecture.md](docs/05-agent-architecture.md).
 
-> The `docs/` folder is kept local and is not tracked by git (see `.gitignore`), so the `docs/` links
-> below work only in a local checkout.
+> The documentation is in English in `docs/`. The Russian course notes live in `docs-ru/`, which is local only
+> (not tracked by git, see `.gitignore`).
 
 ## Repository layout
 
 | Folder | Contents |
 |---|---|
-| [`docs/`](docs/00-overview.md) | Documentation (local only): overview, roadmap, Kubernetes/SRE concepts, agent design, guardrails, chaos engineering, reporting, glossary |
+| [`docs/`](docs/00-overview.md) | Documentation (English): overview, roadmap, Kubernetes/SRE concepts, agent design, guardrails, chaos engineering, reporting, glossary |
 | `infra/` | Everything for the cluster: cluster bootstrap (`cluster/`), Helm charts (`helm/`), raw k8s manifests (`manifests/`), chaos experiment configuration (`chaos/`) |
 | `src/` | The .NET solution: agent core, tools, LLM clients, sandbox services |
 | `scripts/` | Bring-up (`up.ps1`), checks (`smoke-test.ps1`), deploy, game day, mesh recovery |

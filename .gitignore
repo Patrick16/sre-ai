@@ -33,7 +33,7 @@ Thumbs.db
 *repomix*
 
 # Local-only course documentation (Russian; not published, see CLAUDE.md)
-docs/
+docs-ru/
 
 # Local-only assistant instructions (not published)
 CLAUDE.md

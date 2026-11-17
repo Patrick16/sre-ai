@@ -63,9 +63,8 @@ configEnv:
   # More LLM providers for the console (Settings -> Providers and keys). Off by default: a provider needs its BaseUrl
   # here AND the egress rule in networkPolicy.allowToCidrs below - a request can never supply a URL itself.
   # The key is typed into the console (kept in the agent's memory until it restarts) or comes from a Secret:
-  #   secretEnv: [{ name: Llm__Providers__openrouter__ApiKey, secretName: llm-keys, key: openrouter }]
+  #   secretEnv: [{ name: Llm__Providers__deepseek__ApiKey, secretName: llm-keys, key: deepseek }]
   # Models__N limits what a run may choose; without it any model id of that provider is accepted.
-  #Llm__Providers__openrouter__BaseUrl: "https://openrouter.ai/api/v1"   # enabled 2026-11-11 (owner's decision); key: console or Secret
   Llm__Providers__anthropic__BaseUrl: "https://api.anthropic.com/v1/"
   Llm__Providers__anthropic__Models__0: "claude-sonnet-5-5"
   Llm__Providers__deepseek__BaseUrl: "https://api.deepseek.com"
@@ -100,7 +99,7 @@ networkPolicy:
     # External LLM providers. A NetworkPolicy knows no host names, so "may call api.example.com" can only be written
     # as "may open HTTPS to any address" - which also means everything the agent reads (logs, metrics, pod names) can
     # leave the cluster in a prompt. Off by default; turn it on together with a Llm__Providers__* entry above.
-    - { cidr: 0.0.0.0/0, port: 443 }                # enabled 2026-11-11 for OpenRouter: HTTPS to ANY address (see above)
+    - { cidr: 0.0.0.0/0, port: 443 }                # enabled for the external provider DeepSeek (api.deepseek.com): HTTPS to ANY address (see above)
 
 resources:
   requests:
